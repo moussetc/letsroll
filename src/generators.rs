@@ -2,8 +2,8 @@ use rand::Rng;
 
 #[derive(Debug)]
 pub struct Roll {
-    dice: String,
-    result: i16,
+    pub dice: String,
+    pub result: i16,
 }
 
 pub trait Generator {
@@ -12,7 +12,7 @@ pub trait Generator {
     fn generate(dice: &String) -> Roll;
 }
 
-struct Mock;
+pub struct Mock;
 impl Generator for Mock {
     fn generate(a: &String) -> Roll {
         Roll {
