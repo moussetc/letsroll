@@ -22,7 +22,7 @@ impl Transform for FlipFlop {
             .iter()
             .map(|roll| {
                 let result = roll.result.to_string().chars().rev().collect::<String>();
-                let result: i16 = result.parse().unwrap();
+                let result: u16 = result.parse().unwrap();
                 Roll {
                     dice: roll.dice.clone(),
                     result: result,
@@ -35,14 +35,14 @@ impl Transform for FlipFlop {
 pub struct Sum;
 impl Aggregate for Sum {
     fn aggregate(rolls: Vec<Roll>) -> Roll {
-        let dice = rolls
-            .iter()
-            .map(|roll| roll.dice.clone())
-            .collect::<Vec<String>>()
-            .join(" ");
+        // let dice = rolls
+        //     .iter()
+        //     .map(|roll| roll.dice.to_string())
+        //     .collect::<Vec<String>>()
+        //     .join(" ");
         let result = rolls.iter().map(|roll| roll.result).sum();
         Roll {
-            dice: dice,
+            dice: 42,
             result: result,
         }
     }
