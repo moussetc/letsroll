@@ -13,14 +13,10 @@ pub trait ApplyGenerator: Sized {
 
 impl ApplyGenerator for u16 {
     fn apply_generators(request: &Vec<u16>) -> Result<Vec<generators::Roll>, Error> {
-        let rolls: Vec<generators::Roll> = request
+        Ok(request
             .iter()
             .map(|x| generators::NumberedDice::new(*x).generate())
-            .collect();
-
-        Ok(vec![actions::Sum::aggregate(actions::FlipFlop::transform(
-            rolls,
-        ))])
+            .collect::<Vec<generators::Roll>>())
     }
 }
 
@@ -33,11 +29,53 @@ impl ApplyGenerator for String {
         u16::apply_generators(&request)
     }
 }
-// #[cfg(test)]
-// mod tests {
-//     #[test]
-//     fn roll_classicGen() {
-//         let gen = generators::NumberedDice::new(20);
-//         gen.generate()
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use crate::errors;
+    use crate::ApplyGenerator;
+
+    #[test]
+    fn numeric_request_generation() {
+        let request = vec![10, 10, 10];
+        let rolls = u16::apply_generators(&request);
+        match rolls {
+            Ok(rolls) => assert_eq!(
+                rolls.len(),
+                request.len(),
+                "Generation should roll as many dice as requested (expected {})",
+                request.len()
+            ),
+            Err(_) => assert!(false, "Valid request should be generated correctly"),
+        }
+    }
+
+    #[test]
+    fn good_string_generation() {
+        let request = vec![String::from("10"), String::from("10"), String::from("10")];
+        let rolls = String::apply_generators(&request);
+        match rolls {
+            Ok(rolls) => assert_eq!(
+                rolls.len(),
+                request.len(),
+                "Generation should roll as many dice as requested (expected {})",
+                request.len(),
+            ),
+            Err(_) => assert!(false, "Valid request should be parsed correctly"),
+        }
+    }
+
+    #[test]
+    fn bad_string_generation() {
+        let request = vec![
+            String::from("qsdqsd"),
+            String::from("qds"),
+            String::from("qds"),
+        ];
+        let rolls = String::apply_generators(&request);
+        match rolls {
+            Ok(_) => assert!(false, "Invalid request should not be parsed correctly"),
+            Err(_) => assert!(true, "Invalid request should result in error"),
+        }
+    }
+}

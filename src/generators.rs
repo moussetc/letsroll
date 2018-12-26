@@ -1,10 +1,16 @@
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Roll {
     pub dice: u16,
     pub result: u16,
+}
+
+impl Roll {
+    pub fn new(dice: u16, result: u16) -> Roll {
+        Roll { dice, result }
+    }
 }
 
 pub trait Dice {
