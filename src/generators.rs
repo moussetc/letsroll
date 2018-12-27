@@ -1,37 +1,58 @@
 use rand::rngs::ThreadRng;
 use rand::Rng;
+use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct Roll {
+pub struct RollResult {
     pub dice: u16,
     pub result: u16,
 }
 
-impl Roll {
-    pub fn new(dice: u16, result: u16) -> Roll {
-        Roll { dice, result }
+impl RollResult {
+    pub fn new(dice: u16, result: u16) -> RollResult {
+        RollResult { dice, result }
     }
 }
 
-pub trait Dice {
-    fn generate(&mut self) -> Roll;
+#[derive(Debug)]
+pub enum DiceKind {
+    Mock(u16),
+    NumberedDice(u16),
 }
 
-pub struct Mock {
-    dice: u16,
+impl fmt::Display for DiceKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:?}",
+            match self {
+                DiceKind::Mock(mock_value) => format!("Mock{}", mock_value),
+                DiceKind::NumberedDice(sides) => format!("D{}", sides),
+            }
+        )
+    }
+}
+
+pub trait Roll {
+    fn roll(&mut self) -> RollResult;
+}
+
+#[doc(hidden)]
+pub(crate) struct Mock {
+    mock_value: u16,
 }
 
 impl Mock {
-    fn new(dice: u16) -> Mock {
-        Mock { dice }
+    pub fn new(mock_value: u16) -> Mock {
+        Mock { mock_value }
     }
 }
 
-impl Dice for Mock {
-    fn generate(&mut self) -> Roll {
-        Roll {
-            dice: self.dice.clone(),
-            result: 1,
+impl Roll for Mock {
+    fn roll(&mut self) -> RollResult {
+        RollResult {
+            dice: self.mock_value,
+            result: self.mock_value,
         }
     }
 }
@@ -50,11 +71,11 @@ impl NumberedDice {
     }
 }
 
-impl Dice for NumberedDice {
-    fn generate(&mut self) -> Roll {
-        Roll {
+impl Roll for NumberedDice {
+    fn roll(&mut self) -> RollResult {
+        RollResult {
             dice: self.dice,
-            result: self.rng.gen_range(0, self.dice),
+            result: self.rng.gen_range(1, self.dice + 1),
         }
     }
 }
@@ -62,25 +83,29 @@ impl Dice for NumberedDice {
 #[cfg(test)]
 mod tests {
     use crate::generators;
-    use crate::generators::Dice;
+    use crate::generators::Roll;
 
     #[test]
     fn mock_generation() {
-        let dice_sides = 42;
-        let mut gen = generators::Mock::new(dice_sides);
-        let roll = gen.generate();
+        let mock_value = 42;
+        let mut gen = generators::Mock::new(mock_value);
+        let roll = gen.roll();
         assert_eq!(
-            roll.dice, dice_sides,
+            roll.dice, mock_value,
             "Mock generator didn't use the correct number of dice sides"
         );
-        assert_eq!(roll.result, 1, "Mock generator should always roll a 1");
+        assert_eq!(
+            roll.result, mock_value,
+            "Mock generator should always roll as specified (expected {})",
+            mock_value
+        );
     }
 
     #[test]
     fn numbered_dice_generation() {
         let dice_sides = 42;
         let mut gen = generators::NumberedDice::new(dice_sides);
-        let roll = gen.generate();
+        let roll = gen.roll();
         assert_eq!(
             roll.dice, dice_sides,
             "Numbered dice generator didn't use the correct number of dice sides"

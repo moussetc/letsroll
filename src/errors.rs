@@ -36,17 +36,23 @@ impl From<std::num::ParseIntError> for Error {
 /// The kind of an error that can occur.
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
-    /// An error that occurred as a result of parsing a roll request.
+    /// An error that occurred as a result of parsing a request.
     /// This can be a syntax error.
     ///
     /// The string here is the underlying error converted to a string.
     Parse(String),
+
+    /// An error that occurred as a result of parsing a dice request.
+    ///
+    /// The string here is a detailed explanation of what caused the parsing to fail.
+    ParseDice(String),
 }
 
 impl error::Error for Error {
     fn description(&self) -> &str {
         match self.kind {
-            ErrorKind::Parse(_) => "parse error",
+            ErrorKind::Parse(_) => "Request parsing error",
+            ErrorKind::ParseDice(_) => "Dice parsing error",
         }
     }
 }
@@ -54,7 +60,8 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
-            ErrorKind::Parse(ref s) => write!(f, "parse error: {}", s),
+            ErrorKind::Parse(ref s) => write!(f, "Request parse error: {}", s),
+            ErrorKind::ParseDice(ref s) => write!(f, "Dice parsing error: {}", s),
         }
     }
 }
