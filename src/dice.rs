@@ -84,9 +84,7 @@ impl Roll for NumberedDice {
 
 #[cfg(test)]
 mod tests {
-    use crate::generators;
-    use crate::generators::DiceKind;
-    use crate::generators::Roll;
+    use crate::dice::{self, DiceKind, Roll};
 
     #[test]
     fn dice_kind_comparison() {
@@ -100,7 +98,7 @@ mod tests {
     #[test]
     fn mock_generation() {
         let mock_value = 42;
-        let mut gen = generators::Mock::new(mock_value);
+        let mut gen = dice::Mock::new(mock_value);
         let roll = gen.roll();
         match roll.dice {
             DiceKind::Mock(mock) => assert_eq!(mock, mock_value),
@@ -112,7 +110,7 @@ mod tests {
     #[test]
     fn numbered_dice_generation() {
         let dice_sides = 42;
-        let mut gen = generators::NumberedDice::new(dice_sides);
+        let mut gen = dice::NumberedDice::new(dice_sides);
         let roll = gen.roll();
         match roll.dice {
             DiceKind::NumberedDice(sides) => assert_eq!(sides, dice_sides),

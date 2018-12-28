@@ -1,4 +1,4 @@
-use crate::generators::{DiceKind, RollResult};
+use crate::dice::{DiceKind, RollResult};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -119,10 +119,8 @@ impl Aggregate for TotalSum {
 
 #[cfg(test)]
 mod tests {
-    use crate::actions;
-    use crate::actions::Aggregate;
-    use crate::actions::Transform;
-    use crate::generators::{DiceKind, RollResult};
+    use crate::actions::{ self, Aggregate, Transform};
+    use crate::dice::{DiceKind, RollResult};
 
     static INPUT: &[RollResult] = &[
         RollResult {

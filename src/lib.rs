@@ -1,12 +1,10 @@
 pub mod actions;
+pub mod dice;
 pub mod errors;
-pub mod generators;
-use crate::actions::ActionKind;
-use crate::actions::Transform;
+
+use crate::actions::{ActionKind, Transform};
+use crate::dice::{DiceKind, Roll, RollResult};
 use crate::errors::Error;
-use crate::generators::DiceKind;
-use crate::generators::Roll;
-use crate::generators::RollResult;
 use std::fmt;
 use std::str::FromStr;
 
@@ -93,10 +91,8 @@ impl RollRequest {
 
     fn select_dice(kind: &DiceKind) -> Box<dyn Roll> {
         match kind {
-            DiceKind::Mock(mock_value) => Box::new(generators::Mock::new(*mock_value)) as Box<Roll>,
-            DiceKind::NumberedDice(sides) => {
-                Box::new(generators::NumberedDice::new(*sides)) as Box<Roll>
-            }
+            DiceKind::Mock(mock_value) => Box::new(dice::Mock::new(*mock_value)) as Box<Roll>,
+            DiceKind::NumberedDice(sides) => Box::new(dice::NumberedDice::new(*sides)) as Box<Roll>,
         }
     }
 
@@ -145,20 +141,20 @@ impl FromStr for RollRequest {
 }
 
 pub trait ApplyGenerator: Sized {
-    fn apply_generators(request: &Vec<Self>) -> Result<Vec<generators::RollResult>, Error>;
+    fn apply_generators(request: &Vec<Self>) -> Result<Vec<dice::RollResult>, Error>;
 }
 
 impl ApplyGenerator for u16 {
-    fn apply_generators(request: &Vec<u16>) -> Result<Vec<generators::RollResult>, Error> {
+    fn apply_generators(request: &Vec<u16>) -> Result<Vec<dice::RollResult>, Error> {
         Ok(request
             .iter()
-            .map(|x| generators::NumberedDice::new(*x).roll())
-            .collect::<Vec<generators::RollResult>>())
+            .map(|x| dice::NumberedDice::new(*x).roll())
+            .collect::<Vec<dice::RollResult>>())
     }
 }
 
 impl ApplyGenerator for String {
-    fn apply_generators(request: &Vec<String>) -> Result<Vec<generators::RollResult>, Error> {
+    fn apply_generators(request: &Vec<String>) -> Result<Vec<dice::RollResult>, Error> {
         let request = request
             .into_iter()
             .map(|n| n.parse::<u16>())
@@ -170,7 +166,7 @@ impl ApplyGenerator for String {
 #[cfg(test)]
 mod tests {
     // use crate::actions::ActionKind;
-    use crate::generators::DiceKind;
+    use crate::dice::DiceKind;
     use crate::ApplyGenerator;
 
     #[test]

@@ -1,7 +1,4 @@
-use letsroll;
-use letsroll::generators;
-use letsroll::ApplyGenerator;
-use letsroll::DiceRequest;
+use letsroll::{self, dice, ApplyGenerator, DiceRequest};
 use std::str::FromStr;
 
 fn main() {
@@ -11,10 +8,8 @@ fn main() {
     let rolls = String::apply_generators(&request);
     println!("{:?}", rolls);
 
-    let request = letsroll::RollRequest::new(vec![DiceRequest::new(
-        generators::DiceKind::NumberedDice(20),
-        5,
-    )]);
+    let request =
+        letsroll::RollRequest::new(vec![DiceRequest::new(dice::DiceKind::NumberedDice(20), 5)]);
     println!("{}", request);
 
     let dice_request = String::from("5D8 4D2");
