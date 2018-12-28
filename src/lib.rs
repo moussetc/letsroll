@@ -22,6 +22,15 @@ impl FromStr for DiceRequest {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.ends_with("F") {
+            println!("{:?}", &s[0..s.len()]);
+            let number_from_str = s[0..s.len() - 1].parse::<u8>()?;
+            return Ok(DiceRequest {
+                kind: DiceKind::Fudge,
+                number: number_from_str,
+            });
+        }
+
         let parts: Vec<&str> = s.trim().split('D').collect();
 
         // Try to read a numbered dice request (no other dice implement yet)
@@ -93,6 +102,7 @@ impl RollRequest {
         match kind {
             DiceKind::Mock(mock_value) => Box::new(dice::Mock::new(*mock_value)) as Box<Roll>,
             DiceKind::NumberedDice(sides) => Box::new(dice::NumberedDice::new(*sides)) as Box<Roll>,
+            DiceKind::Fudge => Box::new(dice::FudgeDice::new()) as Box<Roll>,
         }
     }
 
@@ -119,7 +129,7 @@ impl fmt::Display for RollRequest {
                 .join(" "),
             self.results()
                 .iter()
-                .map(|roll| roll.result.to_string())
+                .map(|roll| roll.to_string())
                 .collect::<Vec<String>>()
                 .join(" ")
         )

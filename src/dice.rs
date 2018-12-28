@@ -6,6 +6,7 @@ use std::fmt;
 pub enum DiceKind {
     Mock(u16),
     NumberedDice(u16),
+    Fudge,
 }
 
 impl Eq for DiceKind {}
@@ -18,6 +19,7 @@ impl fmt::Display for DiceKind {
             match self {
                 DiceKind::Mock(mock_value) => format!("Mock{}", mock_value),
                 DiceKind::NumberedDice(sides) => format!("D{}", sides),
+                DiceKind::Fudge => String::from("F"),
             }
         )
     }
@@ -34,7 +36,22 @@ impl RollResult {
         RollResult { dice, result }
     }
 }
-
+impl fmt::Display for RollResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self.dice {
+                DiceKind::Fudge => String::from(match self.result {
+                    1 => "\" \"",
+                    2 => "\"+\"",
+                    _ => "\"-\"",
+                }),
+                _ => self.result.to_string(),
+            }
+        )
+    }
+}
 pub trait Roll {
     fn roll(&mut self) -> RollResult;
 }
@@ -78,6 +95,27 @@ impl Roll for NumberedDice {
         RollResult {
             dice: DiceKind::NumberedDice(self.dice),
             result: self.rng.gen_range(1, self.dice + 1),
+        }
+    }
+}
+
+pub struct FudgeDice {
+    rng: ThreadRng,
+}
+
+impl FudgeDice {
+    pub fn new() -> FudgeDice {
+        FudgeDice {
+            rng: rand::thread_rng(),
+        }
+    }
+}
+
+impl Roll for FudgeDice {
+    fn roll(&mut self) -> RollResult {
+        RollResult {
+            dice: DiceKind::Fudge,
+            result: self.rng.gen_range(1, 4),
         }
     }
 }

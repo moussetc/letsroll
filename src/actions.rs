@@ -38,6 +38,7 @@ impl Transform for FlipFlop {
                 let max_dice = match roll.dice {
                     DiceKind::Mock(mock) => mock,
                     DiceKind::NumberedDice(sides) => sides,
+                    DiceKind::Fudge => return *roll,
                 };
                 let max_digits = get_digits_number(max_dice as f32);
                 let result = format!("{:0width$}", roll.result, width = max_digits)
@@ -119,7 +120,7 @@ impl Aggregate for TotalSum {
 
 #[cfg(test)]
 mod tests {
-    use crate::actions::{ self, Aggregate, Transform};
+    use crate::actions::{self, Aggregate, Transform};
     use crate::dice::{DiceKind, RollResult};
 
     static INPUT: &[RollResult] = &[
