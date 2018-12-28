@@ -140,34 +140,10 @@ impl FromStr for RollRequest {
     }
 }
 
-pub trait ApplyGenerator: Sized {
-    fn apply_generators(request: &Vec<Self>) -> Result<Vec<dice::RollResult>, Error>;
-}
-
-impl ApplyGenerator for u16 {
-    fn apply_generators(request: &Vec<u16>) -> Result<Vec<dice::RollResult>, Error> {
-        Ok(request
-            .iter()
-            .map(|x| dice::NumberedDice::new(*x).roll())
-            .collect::<Vec<dice::RollResult>>())
-    }
-}
-
-impl ApplyGenerator for String {
-    fn apply_generators(request: &Vec<String>) -> Result<Vec<dice::RollResult>, Error> {
-        let request = request
-            .into_iter()
-            .map(|n| n.parse::<u16>())
-            .collect::<Result<Vec<u16>, _>>()?;
-        u16::apply_generators(&request)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     // use crate::actions::ActionKind;
     use crate::dice::DiceKind;
-    use crate::ApplyGenerator;
 
     #[test]
     fn mock_request() {
@@ -183,47 +159,4 @@ mod tests {
         assert_eq!(dice_number as usize, output.len());
     }
 
-    #[test]
-    fn numeric_request_generation() {
-        let request = vec![10, 10, 10];
-        let rolls = u16::apply_generators(&request);
-        match rolls {
-            Ok(rolls) => assert_eq!(
-                rolls.len(),
-                request.len(),
-                "Generation should roll as many dice as requested (expected {})",
-                request.len()
-            ),
-            Err(_) => assert!(false, "Valid request should be generated correctly"),
-        }
-    }
-
-    #[test]
-    fn good_string_generation() {
-        let request = vec![String::from("10"), String::from("10"), String::from("10")];
-        let rolls = String::apply_generators(&request);
-        match rolls {
-            Ok(rolls) => assert_eq!(
-                rolls.len(),
-                request.len(),
-                "Generation should roll as many dice as requested (expected {})",
-                request.len(),
-            ),
-            Err(_) => assert!(false, "Valid request should be parsed correctly"),
-        }
-    }
-
-    #[test]
-    fn bad_string_generation() {
-        let request = vec![
-            String::from("qsdqsd"),
-            String::from("qds"),
-            String::from("qds"),
-        ];
-        let rolls = String::apply_generators(&request);
-        match rolls {
-            Ok(_) => assert!(false, "Invalid request should not be parsed correctly"),
-            Err(_) => assert!(true, "Invalid request should result in error"),
-        }
-    }
 }
