@@ -26,6 +26,12 @@ impl fmt::Display for DiceKind {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct Roll<T: Sized + Clone + Copy> {
+    pub dice: DiceKind,
+    pub result: T,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct RollResult {
     pub dice: DiceKind,
     pub result: u16,
@@ -52,9 +58,16 @@ impl fmt::Display for RollResult {
         )
     }
 }
-pub trait Roll {
-    fn roll(&mut self) -> RollResult;
+pub trait DiceOld {
+    fn roll_old(&mut self) -> RollResult;
 }
+
+pub trait Dice<T: Sized + Clone + Copy> {
+    fn roll(&mut self) -> Roll<T>;
+}
+
+/// Type roll result from numbered dice
+type NumericRoll = u16;
 
 #[doc(hidden)]
 pub(crate) struct Mock {
@@ -67,8 +80,17 @@ impl Mock {
     }
 }
 
-impl Roll for Mock {
-    fn roll(&mut self) -> RollResult {
+impl Dice<NumericRoll> for Mock {
+    fn roll(&mut self) -> Roll<NumericRoll> {
+        Roll {
+            dice: DiceKind::Mock(self.mock_value),
+            result: self.mock_value,
+        }
+    }
+}
+
+impl DiceOld for Mock {
+    fn roll_old(&mut self) -> RollResult {
         RollResult {
             dice: DiceKind::Mock(self.mock_value),
             result: self.mock_value,
@@ -90,8 +112,17 @@ impl NumberedDice {
     }
 }
 
-impl Roll for NumberedDice {
-    fn roll(&mut self) -> RollResult {
+impl Dice<NumericRoll> for NumberedDice {
+    fn roll(&mut self) -> Roll<NumericRoll> {
+        Roll {
+            dice: DiceKind::NumberedDice(self.dice),
+            result: self.rng.gen_range(1, self.dice + 1),
+        }
+    }
+}
+
+impl DiceOld for NumberedDice {
+    fn roll_old(&mut self) -> RollResult {
         RollResult {
             dice: DiceKind::NumberedDice(self.dice),
             result: self.rng.gen_range(1, self.dice + 1),
@@ -111,8 +142,21 @@ impl FudgeDice {
     }
 }
 
-impl Roll for FudgeDice {
-    fn roll(&mut self) -> RollResult {
+impl<'a> Dice<&'a str> for NumberedDice {
+    fn roll(&mut self) -> Roll<&'a str> {
+        Roll {
+            dice: DiceKind::NumberedDice(self.dice),
+            result: match self.rng.gen_range(1, 4) {
+                1 => " ",
+                2 => "+",
+                _ => "-",
+            },
+        }
+    }
+}
+
+impl DiceOld for FudgeDice {
+    fn roll_old(&mut self) -> RollResult {
         RollResult {
             dice: DiceKind::Fudge,
             result: self.rng.gen_range(1, 4),
@@ -122,7 +166,7 @@ impl Roll for FudgeDice {
 
 #[cfg(test)]
 mod tests {
-    use crate::dice::{self, DiceKind, Roll};
+    use crate::dice::{self, DiceKind, DiceOld};
 
     #[test]
     fn dice_kind_comparison() {
@@ -137,7 +181,7 @@ mod tests {
     fn mock_generation() {
         let mock_value = 42;
         let mut gen = dice::Mock::new(mock_value);
-        let roll = gen.roll();
+        let roll = gen.roll_old();
         match roll.dice {
             DiceKind::Mock(mock) => assert_eq!(mock, mock_value),
             _ => assert!(false, "Wrong dice kind in result roll"),
@@ -149,7 +193,7 @@ mod tests {
     fn numbered_dice_generation() {
         let dice_sides = 42;
         let mut gen = dice::NumberedDice::new(dice_sides);
-        let roll = gen.roll();
+        let roll = gen.roll_old();
         match roll.dice {
             DiceKind::NumberedDice(sides) => assert_eq!(sides, dice_sides),
             _ => assert!(false, "Wrong dice kind in result roll"),

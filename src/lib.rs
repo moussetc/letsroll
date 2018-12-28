@@ -3,7 +3,7 @@ pub mod dice;
 pub mod errors;
 
 use crate::actions::{ActionKind, Transform};
-use crate::dice::{DiceKind, Roll, RollResult};
+use crate::dice::{DiceKind, DiceOld, FudgeDice, NumberedDice, Roll, RollResult};
 use crate::errors::Error;
 use std::fmt;
 use std::str::FromStr;
@@ -63,7 +63,7 @@ impl fmt::Display for DiceRequest {
 
 // Dans un premier temps, on ne lance qu'un seul type de dés, merci bien.
 pub struct RollRequest {
-    dice: Vec<(DiceRequest, Box<dyn Roll>)>,
+    dice: Vec<(DiceRequest, Box<dyn DiceOld>)>,
     steps: Vec<RollResult>,
 }
 
@@ -82,7 +82,7 @@ impl RollRequest {
         {
             // Initial rolls
             for dice in request.dice.iter_mut() {
-                let rolls = (0..dice.0.number).map(|_| dice.1.roll());
+                let rolls = (0..dice.0.number).map(|_| dice.1.roll_old());
                 request.steps.extend(rolls);
             }
         }
@@ -98,17 +98,25 @@ impl RollRequest {
         &self.steps
     }
 
-    fn select_dice(kind: &DiceKind) -> Box<dyn Roll> {
+    fn select_dice(kind: &DiceKind) -> Box<dyn DiceOld> {
         match kind {
-            DiceKind::Mock(mock_value) => Box::new(dice::Mock::new(*mock_value)) as Box<Roll>,
-            DiceKind::NumberedDice(sides) => Box::new(dice::NumberedDice::new(*sides)) as Box<Roll>,
-            DiceKind::Fudge => Box::new(dice::FudgeDice::new()) as Box<Roll>,
+            DiceKind::Mock(mock_value) => Box::new(dice::Mock::new(*mock_value)) as Box<DiceOld>,
+            DiceKind::NumberedDice(sides) => Box::new(NumberedDice::new(*sides)) as Box<DiceOld>,
+            DiceKind::Fudge => Box::new(FudgeDice::new()) as Box<DiceOld>,
         }
     }
 
+    // fn select_dice2(kind: &DiceKind) -> impl Dice {
+    //     match kind {
+    //         DiceKind::Mock(mock_value) => dice::Mock::new(*mock_value),
+    //         DiceKind::NumberedDice(sides) => NumberedDice::new(*sides),
+    //         DiceKind::Fudge => FudgeDice::new(),
+    //     }
+    // }
+
     fn select_action(kind: &ActionKind) -> Box<dyn Transform> {
         match kind {
-            ActionKind::Identity => Box::new(actions::Identity {}) as Box<Transform>,
+            ActionKind::Identity => Box::new(actions::IdentityOld {}) as Box<Transform>,
             ActionKind::FlipFlop => Box::new(actions::FlipFlop {}) as Box<Transform>,
             ActionKind::MultiplyBy(factor) => {
                 Box::new(actions::MultiplyBy::new(*factor)) as Box<Transform>

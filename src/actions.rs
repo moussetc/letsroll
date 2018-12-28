@@ -16,12 +16,16 @@ pub trait Aggregate {
     fn aggregate(rolls: &Vec<RollResult>) -> Option<RollResult>;
 }
 
-pub struct Identity;
-impl Transform for Identity {
+pub struct IdentityOld;
+impl Transform for IdentityOld {
     fn transform(&self, rolls: &Vec<RollResult>) -> Vec<RollResult> {
         rolls.iter().map(|roll| roll.clone()).collect()
     }
 }
+
+// pub trait Identity {
+//     transform(&self) ->;
+// }
 
 /// Flip the digits of a numbered dice roll.
 ///
@@ -149,7 +153,7 @@ mod tests {
     #[test]
     fn transform_identity() {
         let input = INPUT.to_vec();
-        let output = actions::Identity {}.transform(&input);
+        let output = actions::IdentityOld {}.transform(&input);
         let expected = &input;
         assert_eq!(output.len(), expected.len());
         for i in 0..expected.len() - 1 {
