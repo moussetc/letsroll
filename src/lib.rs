@@ -2,12 +2,17 @@ pub mod actions;
 pub mod dice;
 pub mod errors;
 
-use crate::actions::{ActionKind, Transform};
-use crate::dice::{DiceKind, DiceOld, FudgeDice, NumberedDice, Roll, RollResult};
+// use crate::actions::{ActionKind, Transform};
+use crate::dice::{
+    Dice, DiceKind, FudgeDice, NumberedDice, NumericDice, NumericRoll, Roll, RollEnum, TextDice,
+    TextRoll,
+};
 use crate::errors::Error;
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct DiceRequest {
     kind: DiceKind,
     number: u8,
@@ -23,10 +28,9 @@ impl FromStr for DiceRequest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.ends_with("F") {
-            println!("{:?}", &s[0..s.len()]);
             let number_from_str = s[0..s.len() - 1].parse::<u8>()?;
             return Ok(DiceRequest {
-                kind: DiceKind::Fudge,
+                kind: DiceKind::TextDice(TextDice::FudgeDice(FudgeDice::new())),
                 number: number_from_str,
             });
         }
@@ -44,7 +48,9 @@ impl FromStr for DiceRequest {
                 }
                 Ok(DiceRequest {
                     number: number_fromstr,
-                    kind: DiceKind::NumberedDice(sides_fromstr),
+                    kind: DiceKind::NumericDice(NumericDice::NumberedDice(NumberedDice::new(
+                        sides_fromstr,
+                    ))),
                 })
             }
             _ => Err(Error::new(errors::ErrorKind::ParseDice(format!(
@@ -61,85 +67,84 @@ impl fmt::Display for DiceRequest {
     }
 }
 
-// Dans un premier temps, on ne lance qu'un seul type de dés, merci bien.
 pub struct RollRequest {
-    dice: Vec<(DiceRequest, Box<dyn DiceOld>)>,
-    steps: Vec<RollResult>,
+    rolls: HashMap<DiceRequest, Vec<RollEnum>>,
 }
 
 impl RollRequest {
     pub fn new(dice_requests: Vec<DiceRequest>) -> RollRequest {
         let mut request = RollRequest {
-            dice: dice_requests
-                .into_iter()
-                .map(|dice_request| {
-                    let dice = RollRequest::select_dice(&dice_request.kind);
-                    (dice_request, dice)
-                })
-                .collect(),
-            steps: vec![],
+            rolls: HashMap::new(),
         };
+        // Initial rolls
+
+        let requests = dice_requests;
         {
-            // Initial rolls
-            for dice in request.dice.iter_mut() {
-                let rolls = (0..dice.0.number).map(|_| dice.1.roll_old());
-                request.steps.extend(rolls);
+            for mut dice in requests.into_iter() {
+                let mut rolls: Vec<RollEnum> = vec![];
+                for _ in 0..dice.number {
+                    let roll = match dice.kind {
+                        DiceKind::NumericDice(ref mut num_dice) => {
+                            RollEnum::NumericRoll(num_dice.roll())
+                        }
+                        DiceKind::TextDice(ref mut dice) => RollEnum::TextRoll(dice.roll()),
+                    };
+                    rolls.push(roll);
+                }
+                request.rolls.insert(dice, rolls);
             }
         }
+
+        // let rolls = (0..dice.number).map(|_| match dice.kind {
+        //     DiceKind::NumericDice(ref mut num_dice) => {
+        //         RollEnum::NumericRoll(num_dice.roll())
+        //     }
+        //     DiceKind::TextDice(ref mut dice) => RollEnum::TextRoll(dice.roll()),
+        // });
+
+        // request.steps.extend(rolls);
         request
     }
 
-    pub fn add_step(&mut self, kind: actions::ActionKind) {
-        let action_kind = RollRequest::select_action(&kind);
-        self.steps = action_kind.transform(&self.steps);
-    }
-
-    pub fn results(&self) -> &Vec<RollResult> {
-        &self.steps
-    }
-
-    fn select_dice(kind: &DiceKind) -> Box<dyn DiceOld> {
-        match kind {
-            DiceKind::Mock(mock_value) => Box::new(dice::Mock::new(*mock_value)) as Box<DiceOld>,
-            DiceKind::NumberedDice(sides) => Box::new(NumberedDice::new(*sides)) as Box<DiceOld>,
-            DiceKind::Fudge => Box::new(FudgeDice::new()) as Box<DiceOld>,
-        }
-    }
-
-    // fn select_dice2(kind: &DiceKind) -> impl Dice {
-    //     match kind {
-    //         DiceKind::Mock(mock_value) => dice::Mock::new(*mock_value),
-    //         DiceKind::NumberedDice(sides) => NumberedDice::new(*sides),
-    //         DiceKind::Fudge => FudgeDice::new(),
-    //     }
+    // pub fn add_step(&mut self, kind: actions::ActionKind) {
+    //     let action_kind = RollRequest::select_action(&kind);
+    //     self.steps = action_kind.transform(&self.steps);
     // }
 
-    fn select_action(kind: &ActionKind) -> Box<dyn Transform> {
-        match kind {
-            ActionKind::Identity => Box::new(actions::IdentityOld {}) as Box<Transform>,
-            ActionKind::FlipFlop => Box::new(actions::FlipFlop {}) as Box<Transform>,
-            ActionKind::MultiplyBy(factor) => {
-                Box::new(actions::MultiplyBy::new(*factor)) as Box<Transform>
-            }
-        }
+    pub fn results(&self) -> &HashMap<DiceRequest, Vec<RollEnum>> {
+        &self.rolls
     }
+
+    // fn select_action(kind: &ActionKind) -> Box<dyn Transform> {
+    //     match kind {
+    //         ActionKind::Identity => Box::new(actions::IdentityOld {}) as Box<Transform>,
+    //         ActionKind::FlipFlop => Box::new(actions::FlipFlop {}) as Box<Transform>,
+    //         ActionKind::MultiplyBy(factor) => {
+    //             Box::new(actions::MultiplyBy::new(*factor)) as Box<Transform>
+    //         }
+    //     }
+    // }
 }
 
 impl fmt::Display for RollRequest {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Requested dice : {}\nResults: {}",
-            self.dice
-                .iter()
-                .map(|request| request.0.to_string())
-                .collect::<Vec<String>>()
-                .join(" "),
+            "{}",
             self.results()
                 .iter()
-                .map(|roll| roll.to_string())
+                .map(|keyval| format!(
+                    "{} : {}|",
+                    keyval.0,
+                    keyval
+                        .1
+                        .iter()
+                        .map(|roll| roll.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                ))
                 .collect::<Vec<String>>()
-                .join(" ")
+                .join(" "),
         )
     }
 }
@@ -161,20 +166,33 @@ impl FromStr for RollRequest {
 #[cfg(test)]
 mod tests {
     // use crate::actions::ActionKind;
-    use crate::dice::DiceKind;
+    use crate::dice::{DiceKind, Mock, NumericDice};
 
     #[test]
     fn mock_request() {
         let dice_number = 5;
-        let mock_value = 15;
-        let request = crate::RollRequest::new(vec![crate::DiceRequest::new(
-            DiceKind::Mock(mock_value),
+        let mock_val = 15;
+
+        let dice_requests = vec![crate::DiceRequest::new(
+            DiceKind::NumericDice(NumericDice::Mock(Mock::new(mock_val))),
             dice_number,
-        )]);
+        )];
+        let dice_requests_len = dice_requests.len();
+
+        let request = crate::RollRequest::new(dice_requests);
         // request.add_step(ActionKind::FlipFlop);
         let output = request.results();
 
-        assert_eq!(dice_number as usize, output.len());
+        assert_eq!(output.len(), dice_requests_len);
+        for keyval in output.iter() {
+            match &keyval.0.kind {
+                DiceKind::NumericDice(num_dice) => match num_dice {
+                    NumericDice::Mock(Mock { mock_value, .. }) => assert_eq!(mock_val, *mock_value),
+                    _ => assert!(false, "Wrong dice kind"),
+                },
+                _ => assert!(false, "Wrong dice kind"),
+            }
+        }
     }
 
 }
