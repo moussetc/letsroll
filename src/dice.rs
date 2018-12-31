@@ -2,6 +2,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cell::RefCell;
 use std::fmt;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
 /// Type roll result from numbered dice
@@ -28,7 +29,7 @@ pub enum DiceKind {
 //     pub fn get_dice<T>(&self) -> Box<dyn Dice<RollResult = T>> {
 //         match self {
 //             DiceKind::NumericKind(num_dice) => match num_dice {
-//                 NumericDice::Mock(dice) => Box::new(dice) as Box<Dice>,
+//                 NumericDice::Const(dice) => Box::new(dice) as Box<Dice>,
 //                 NumericDice::NumberedDice(dice) => Box::new(dice) as Box<Dice>,
 //             },
 //             DiceKind::TextKind(text_dice) => match text_dice {
@@ -45,11 +46,12 @@ impl fmt::Display for DiceKind {
             "{}",
             match self {
                 DiceKind::NumericKind(num_dice) => match num_dice {
-                    NumericDice::Mock(dice) => format!("Mock{}", dice.mock_value),
+                    NumericDice::Const(dice) => format!("Const{}", dice.const_value),
                     NumericDice::NumberedDice(dice) => format!("D{}", dice.sides),
                 },
                 DiceKind::TextKind(text_dice) => match text_dice {
                     TextDice::FudgeDice(_) => String::from("F"),
+                    TextDice::Const(d) => d.const_value.to_string(),
                 },
             }
         )
@@ -58,13 +60,14 @@ impl fmt::Display for DiceKind {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum NumericDice {
-    Mock(Mock),
+    Const(Const<NumericRoll>),
     NumberedDice(NumberedDice),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum TextDice {
     FudgeDice(FudgeDice),
+    Const(Const<TextRoll>),
 }
 
 impl Roll for NumericDice {
@@ -72,8 +75,8 @@ impl Roll for NumericDice {
 
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
         match self {
-            NumericDice::Mock(mock) => mock.roll(n),
-            NumericDice::NumberedDice(nd) => nd.roll(n),
+            NumericDice::Const(dice) => dice.roll(n),
+            NumericDice::NumberedDice(dice) => dice.roll(n),
         }
     }
 }
@@ -83,7 +86,8 @@ impl Roll for TextDice {
 
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
         match self {
-            TextDice::FudgeDice(fudge) => fudge.roll(n),
+            TextDice::FudgeDice(dice) => dice.roll(n),
+            TextDice::Const(dice) => dice.roll(n),
         }
     }
 }
@@ -113,29 +117,30 @@ impl fmt::Display for Rolls {
     }
 }
 
+/// Dice that always return the same value
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct Mock {
-    pub(crate) mock_value: u16,
+pub struct Const<T: Debug + PartialEq + Eq + Hash> {
+    pub(crate) const_value: T,
 }
 
-impl Mock {
-    pub fn new(mock_value: u16) -> Mock {
-        Mock { mock_value }
+impl<T: Debug + PartialEq + Eq + Hash> Const<T> {
+    pub fn new(const_value: T) -> Const<T> {
+        Const { const_value }
     }
 }
 
-impl Roll for Mock {
-    type RollResult = Vec<NumericRoll>;
+impl<T: Debug + PartialEq + Eq + Hash + Copy> Roll for Const<T> {
+    type RollResult = Vec<T>;
 
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
-        (1..n + 1).map(|_| self.mock_value).collect()
+        (1..n + 1).map(|_| self.const_value).collect()
     }
 }
 
-impl GetNumericDiceParameter for Mock {
+impl GetNumericDiceParameter for Const<NumericRoll> {
     fn get_numeric_param(&self) -> NumericRoll {
-        self.mock_value
+        self.const_value
     }
 }
 
@@ -233,17 +238,19 @@ impl Hash for FudgeDice {
 
 #[cfg(test)]
 mod tests {
-    use crate::dice::{self, DiceKind, FudgeDice, Mock, NumberedDice, NumericDice, Roll, TextDice};
+    use crate::dice::{
+        self, Const, DiceKind, FudgeDice, NumberedDice, NumericDice, Roll, TextDice,
+    };
 
     #[test]
     fn dice_kind_comparison() {
         assert_eq!(
-            NumericDice::Mock(Mock::new(10)),
-            NumericDice::Mock(Mock::new(10))
+            NumericDice::Const(Const::new(10)),
+            NumericDice::Const(Const::new(10))
         );
         assert_ne!(
-            NumericDice::Mock(Mock::new(10)),
-            NumericDice::Mock(Mock::new(20))
+            NumericDice::Const(Const::new(10)),
+            NumericDice::Const(Const::new(20))
         );
         assert_eq!(
             NumericDice::NumberedDice(NumberedDice::new(10)),
@@ -255,7 +262,7 @@ mod tests {
         );
         assert_ne!(
             NumericDice::NumberedDice(NumberedDice::new(10)),
-            NumericDice::Mock(Mock::new(10))
+            NumericDice::Const(Const::new(10))
         );
         assert_eq!(FudgeDice::new(), FudgeDice::new());
         assert_eq!(
@@ -264,7 +271,7 @@ mod tests {
         );
         assert_ne!(
             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
-            DiceKind::NumericKind(NumericDice::Mock(Mock::new(10)))
+            DiceKind::NumericKind(NumericDice::Const(Const::new(10)))
         );
         assert_ne!(
             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
@@ -273,14 +280,14 @@ mod tests {
     }
 
     #[test]
-    fn mock_generation() {
-        let mock_value = 42;
+    fn const_generation() {
+        let const_value = 42;
         let roll_number = 5;
-        let gen = Mock::new(mock_value);
+        let gen = Const::new(const_value);
         let rolls = gen.roll(roll_number);
         assert_eq!(rolls.len(), roll_number as usize);
         for roll in rolls.iter() {
-            assert_eq!(*roll, mock_value);
+            assert_eq!(*roll, const_value);
         }
     }
 

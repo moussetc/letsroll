@@ -145,8 +145,8 @@ impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
 
 #[cfg(test)]
 mod tests {
-    use crate::actions::{FlipFlop, Identity, MultiplyBy, Sum};
-    use crate::dice::{NumberedDice, NumericRoll};
+    use crate::actions::{FlipFlop, Identity, MultiplyBy, Reroll, Sum};
+    use crate::dice::{Const, NumberedDice, NumericRoll, TextRoll};
 
     static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
 
@@ -159,6 +159,12 @@ mod tests {
         for i in 0..expected.len() - 1 {
             assert_eq!(output[i], expected[i]);
         }
+    }
+
+    #[test]
+    fn transform_count_values() {
+        //TODO
+        // :( It's useless to return sums without the associated value! Argh.
     }
 
     #[test]
@@ -189,6 +195,28 @@ mod tests {
         let input = NUM_INPUT.to_vec();
         let output = input.sum();
         let expected = vec![118];
+        assert_eq!(output.len(), expected.len());
+        for i in 0..expected.len() - 1 {
+            assert_eq!(output[i], expected[i]);
+        }
+    }
+
+    #[test]
+    fn transform_reroll_num() {
+        let mut input = NUM_INPUT.to_vec();
+        let output = input.reroll(&Const::new(42), &1);
+        let expected = vec![42, 42, 42, 15, 100];
+        assert_eq!(output.len(), expected.len());
+        for i in 0..expected.len() - 1 {
+            assert_eq!(output[i], expected[i]);
+        }
+    }
+
+    #[test]
+    fn transform_reroll_text() {
+        let mut input = vec![' ', '+', '-', '+', '-'];
+        let output = input.reroll(&Const::new(' '), &'-');
+        let expected = vec![' ', '+', ' ', '+', ' '];
         assert_eq!(output.len(), expected.len());
         for i in 0..expected.len() - 1 {
             assert_eq!(output[i], expected[i]);

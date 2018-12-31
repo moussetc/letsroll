@@ -96,7 +96,7 @@ impl RollRequest {
             *rolls = match rolls {
                 Rolls::NumericRolls(num_rolls) => match &dice.kind {
                     DiceKind::NumericKind(num_dice) => match &num_dice {
-                        NumericDice::NumberedDice(_) | NumericDice::Mock(_) => {
+                        NumericDice::NumberedDice(_) | NumericDice::Const(_) => {
                             match RollRequest::add_step_numeric_input(num_dice, num_rolls, &action)
                             {
                                 Ok(new_rolls) => new_rolls,
@@ -113,7 +113,7 @@ impl RollRequest {
                 },
                 Rolls::TextRolls(text_rolls) => match &dice.kind {
                     DiceKind::TextKind(text_dice) => match &text_dice {
-                        TextDice::FudgeDice(_) => {
+                        TextDice::FudgeDice(_) | TextDice::Const(_) => {
                             match RollRequest::add_step_text_input(text_dice, text_rolls, &action) {
                                 Ok(new_rolls) => new_rolls,
                                 Err(error) => Err(error)?,
@@ -128,8 +128,6 @@ impl RollRequest {
                     }
                 },
             };
-
-            // TODO : apply rerolls
         }
         Ok(())
     }
@@ -146,6 +144,7 @@ impl RollRequest {
                 TextDice::FudgeDice(ref d) => {
                     Rolls::TextRolls(text_rolls.reroll(d, &value_to_reroll))
                 }
+                TextDice::Const(ref d) => Rolls::TextRolls(text_rolls.reroll(d, &value_to_reroll)),
             },
             _ => {
                 return Err(Error::new(ErrorKind::IncompatibleAction(format!(
@@ -167,10 +166,10 @@ impl RollRequest {
             Action::CountValues => num_rolls.count(),
             Action::FlipFlop => match dice {
                 NumericDice::NumberedDice(ref d) => num_rolls.flip(d),
-                NumericDice::Mock(ref d) => num_rolls.flip(d),
+                NumericDice::Const(ref d) => num_rolls.flip(d),
             },
             Action::RerollNumeric(value_to_reroll) => match dice {
-                NumericDice::Mock(d) => num_rolls.reroll(d, &value_to_reroll),
+                NumericDice::Const(d) => num_rolls.reroll(d, &value_to_reroll),
                 NumericDice::NumberedDice(ref d) => num_rolls.reroll(d, &value_to_reroll),
             },
             Action::MultiplyBy(factor) => num_rolls.multiply(*factor),
@@ -221,7 +220,7 @@ impl FromStr for RollRequest {
 #[cfg(test)]
 mod tests {
     use crate::actions::Action;
-    use crate::dice::{DiceKind, FudgeDice, Mock, NumberedDice, NumericDice, TextDice};
+    use crate::dice::{Const, DiceKind, FudgeDice, NumberedDice, NumericDice, TextDice};
     use crate::DiceRequest;
 
     #[test]
@@ -277,7 +276,7 @@ mod tests {
         let mut dice_requests = vec![];
         if test_num_types {
             dice_requests.push(DiceRequest::new(
-                DiceKind::NumericKind(NumericDice::Mock(Mock::new(dice_val))),
+                DiceKind::NumericKind(NumericDice::Const(Const::new(dice_val))),
                 dice_number,
             ));
             dice_requests.push(DiceRequest::new(
