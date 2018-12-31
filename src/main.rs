@@ -1,4 +1,4 @@
-use letsroll::{self, dice, DiceRequest};
+use letsroll;
 use std::str::FromStr;
 
 fn main() {

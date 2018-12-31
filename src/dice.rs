@@ -1,22 +1,42 @@
 use rand::rngs::ThreadRng;
 use rand::Rng;
+use std::cell::RefCell;
 use std::fmt;
-use std::fmt::Display;
-use std::hash::Hash;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 
-// TODO continuer de remplacer par les énumérations qui permettent d'éviter les génériques (DiceKind, NumericRoll, TextRoll, etc.)
+/// Type roll result from numbered dice
+pub type DiceNumber = u8;
+pub type NumericRoll = u16;
+pub type TextRoll = char;
 
-pub trait Dice {
-    type RollResult: Sized + Clone + Copy;
-    fn roll(&mut self) -> Self::RollResult;
+pub trait Roll {
+    type RollResult;
+    fn roll(&self, n: DiceNumber) -> Self::RollResult;
+}
+
+pub trait GetNumericDiceParameter {
+    fn get_numeric_param(&self) -> NumericRoll;
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum DiceKind {
-    NumericDice(NumericDice),
-    TextDice(TextDice),
+    NumericKind(NumericDice),
+    TextKind(TextDice),
 }
+
+// impl DiceKind {
+//     pub fn get_dice<T>(&self) -> Box<dyn Dice<RollResult = T>> {
+//         match self {
+//             DiceKind::NumericKind(num_dice) => match num_dice {
+//                 NumericDice::Mock(dice) => Box::new(dice) as Box<Dice>,
+//                 NumericDice::NumberedDice(dice) => Box::new(dice) as Box<Dice>,
+//             },
+//             DiceKind::TextKind(text_dice) => match text_dice {
+//                 TextDice::FudgeDice => Box::new(dice) as Box<Dice>,
+//             },
+//         }
+//     }
+// }
 
 impl fmt::Display for DiceKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -24,12 +44,12 @@ impl fmt::Display for DiceKind {
             f,
             "{}",
             match self {
-                DiceKind::NumericDice(num_dice) => match num_dice {
+                DiceKind::NumericKind(num_dice) => match num_dice {
                     NumericDice::Mock(dice) => format!("Mock{}", dice.mock_value),
                     NumericDice::NumberedDice(dice) => format!("D{}", dice.sides),
                 },
-                DiceKind::TextDice(text_dice) => match text_dice {
-                    TextDice::FudgeDice(dice) => String::from("F"),
+                DiceKind::TextKind(text_dice) => match text_dice {
+                    TextDice::FudgeDice(_) => String::from("F"),
                 },
             }
         )
@@ -47,53 +67,51 @@ pub enum TextDice {
     FudgeDice(FudgeDice),
 }
 
-impl Dice for NumericDice {
-    type RollResult = Roll<NumericRoll>;
+impl Roll for NumericDice {
+    type RollResult = Vec<NumericRoll>;
 
-    fn roll(&mut self) -> Self::RollResult {
+    fn roll(&self, n: DiceNumber) -> Self::RollResult {
         match self {
-            NumericDice::Mock(mock) => mock.roll(),
-            NumericDice::NumberedDice(nd) => nd.roll(),
+            NumericDice::Mock(mock) => mock.roll(n),
+            NumericDice::NumberedDice(nd) => nd.roll(n),
         }
     }
 }
 
-impl Dice for TextDice {
-    type RollResult = Roll<TextRoll>;
+impl Roll for TextDice {
+    type RollResult = Vec<TextRoll>;
 
-    fn roll(&mut self) -> Self::RollResult {
+    fn roll(&self, n: DiceNumber) -> Self::RollResult {
         match self {
-            TextDice::FudgeDice(fudge) => fudge.roll(),
+            TextDice::FudgeDice(fudge) => fudge.roll(n),
         }
     }
 }
 
-pub enum RollEnum {
-    NumericRoll(Roll<NumericRoll>),
-    TextRoll(Roll<TextRoll>),
+pub enum Rolls {
+    NumericRolls(Vec<NumericRoll>),
+    TextRolls(Vec<TextRoll>),
 }
-impl fmt::Display for RollEnum {
+impl fmt::Display for Rolls {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RollEnum::NumericRoll(dice) => write!(f, "{}", dice),
-            RollEnum::TextRoll(dice) => write!(f, "{}", dice),
-        }
+        write!(
+            f,
+            "{}",
+            match self {
+                Rolls::NumericRolls(rolls) => rolls
+                    .iter()
+                    .map(|roll| roll.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" "),
+                Rolls::TextRolls(rolls) => rolls
+                    .iter()
+                    .map(|roll| roll.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" "),
+            }
+        )
     }
 }
-
-#[derive(Debug, Clone, Copy)]
-pub struct Roll<T: Sized + Clone + Copy> {
-    pub result: T,
-}
-impl<T: Sized + Display + Clone + Copy> fmt::Display for Roll<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.result.to_string(),)
-    }
-}
-
-/// Type roll result from numbered dice
-pub type NumericRoll = u16;
-pub type TextRoll = char;
 
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -107,28 +125,42 @@ impl Mock {
     }
 }
 
-impl Dice for Mock {
-    type RollResult = Roll<NumericRoll>;
+impl Roll for Mock {
+    type RollResult = Vec<NumericRoll>;
 
-    fn roll(&mut self) -> Self::RollResult {
-        Roll {
-            result: self.mock_value,
-        }
+    fn roll(&self, n: DiceNumber) -> Self::RollResult {
+        (1..n + 1).map(|_| self.mock_value).collect()
+    }
+}
+
+impl GetNumericDiceParameter for Mock {
+    fn get_numeric_param(&self) -> NumericRoll {
+        self.mock_value
     }
 }
 
 #[derive(Debug)]
 pub struct NumberedDice {
     sides: NumericRoll,
-    rng: ThreadRng,
+    rng_ref: RefCell<ThreadRng>,
 }
 
 impl NumberedDice {
     pub fn new(sides: NumericRoll) -> NumberedDice {
         NumberedDice {
             sides,
-            rng: rand::thread_rng(),
+            rng_ref: RefCell::new(rand::thread_rng()),
         }
+    }
+
+    pub fn get_sides(&self) -> NumericRoll {
+        self.sides
+    }
+}
+
+impl GetNumericDiceParameter for NumberedDice {
+    fn get_numeric_param(&self) -> NumericRoll {
+        self.sides
     }
 }
 
@@ -140,13 +172,14 @@ impl PartialEq for NumberedDice {
 
 impl Eq for NumberedDice {}
 
-impl Dice for NumberedDice {
-    type RollResult = Roll<NumericRoll>;
+impl Roll for NumberedDice {
+    type RollResult = Vec<NumericRoll>;
 
-    fn roll(&mut self) -> Self::RollResult {
-        Roll {
-            result: self.rng.gen_range(1, self.sides + 1),
-        }
+    fn roll(&self, n: DiceNumber) -> Self::RollResult {
+        let mut rng = self.rng_ref.borrow_mut();
+        (1..n + 1)
+            .map(|_| rng.gen_range(1, self.sides + 1))
+            .collect()
     }
 }
 
@@ -158,32 +191,33 @@ impl Hash for NumberedDice {
 
 #[derive(Debug)]
 pub struct FudgeDice {
-    rng: ThreadRng,
+    rng_ref: RefCell<ThreadRng>,
 }
 
 impl FudgeDice {
     pub fn new() -> FudgeDice {
         FudgeDice {
-            rng: rand::thread_rng(),
+            rng_ref: RefCell::new(rand::thread_rng()),
         }
     }
 }
 
-impl Dice for FudgeDice {
-    type RollResult = Roll<char>;
-    fn roll(&mut self) -> Self::RollResult {
-        Roll {
-            result: match self.rng.gen_range(1, 4) {
+impl Roll for FudgeDice {
+    type RollResult = Vec<TextRoll>;
+    fn roll(&self, n: DiceNumber) -> Self::RollResult {
+        let mut rng = self.rng_ref.borrow_mut();
+        (1..n + 1)
+            .map(|_| match rng.gen_range(1, 4) {
                 1 => ' ',
                 2 => '+',
                 _ => '-',
-            },
-        }
+            })
+            .collect()
     }
 }
 
 impl PartialEq for FudgeDice {
-    fn eq(&self, other: &FudgeDice) -> bool {
+    fn eq(&self, _: &FudgeDice) -> bool {
         true
     }
 }
@@ -199,45 +233,70 @@ impl Hash for FudgeDice {
 
 #[cfg(test)]
 mod tests {
-    use crate::dice::{self, Dice, DiceKind};
+    use crate::dice::{self, DiceKind, FudgeDice, Mock, NumberedDice, NumericDice, Roll, TextDice};
 
-    // #[test]
-    // fn dice_kind_comparison() {
-    //     assert_eq!(DiceKind::Mock(10), DiceKind::Mock(10));
-    //     assert_ne!(DiceKind::Mock(10), DiceKind::Mock(20));
-    //     assert_eq!(DiceKind::NumberedDice(10), DiceKind::NumberedDice(10));
-    //     assert_ne!(DiceKind::NumberedDice(10), DiceKind::NumberedDice(30));
-    //     assert_ne!(DiceKind::NumberedDice(10), DiceKind::Mock(10));
-    // }
+    #[test]
+    fn dice_kind_comparison() {
+        assert_eq!(
+            NumericDice::Mock(Mock::new(10)),
+            NumericDice::Mock(Mock::new(10))
+        );
+        assert_ne!(
+            NumericDice::Mock(Mock::new(10)),
+            NumericDice::Mock(Mock::new(20))
+        );
+        assert_eq!(
+            NumericDice::NumberedDice(NumberedDice::new(10)),
+            NumericDice::NumberedDice(NumberedDice::new(10))
+        );
+        assert_ne!(
+            NumericDice::NumberedDice(NumberedDice::new(10)),
+            NumericDice::NumberedDice(NumberedDice::new(30))
+        );
+        assert_ne!(
+            NumericDice::NumberedDice(NumberedDice::new(10)),
+            NumericDice::Mock(Mock::new(10))
+        );
+        assert_eq!(FudgeDice::new(), FudgeDice::new());
+        assert_eq!(
+            DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
+            DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10)))
+        );
+        assert_ne!(
+            DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
+            DiceKind::NumericKind(NumericDice::Mock(Mock::new(10)))
+        );
+        assert_ne!(
+            DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
+            DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new()))
+        );
+    }
 
-    // #[test]
-    // fn mock_generation() {
-    //     let mock_value = 42;
-    //     let mut gen = dice::Mock::new(mock_value);
-    //     let roll = gen.roll();
-    //     match roll.dice {
-    //         DiceKind::Mock(mock) => assert_eq!(mock, mock_value),
-    //         _ => assert!(false, "Wrong dice kind in result roll"),
-    //     }
-    //     assert_eq!(roll.result, mock_value);
-    // }
+    #[test]
+    fn mock_generation() {
+        let mock_value = 42;
+        let roll_number = 5;
+        let gen = Mock::new(mock_value);
+        let rolls = gen.roll(roll_number);
+        assert_eq!(rolls.len(), roll_number as usize);
+        for roll in rolls.iter() {
+            assert_eq!(*roll, mock_value);
+        }
+    }
 
-    // #[test]
-    // fn numbered_dice_generation() {
-    //     let dice_sides = 42;
-    //     let mut gen = dice::NumberedDice::new(dice_sides);
-    //     let roll = gen.roll();
-    //     match roll.dice {
-    //         DiceKind::NumberedDice(sides) => assert_eq!(sides, dice_sides),
-    //         _ => assert!(false, "Wrong dice kind in result roll"),
-    //     }
-    //     assert!(
-    //         roll.result > 0,
-    //         "Numbered dice generator rolls should be > 0"
-    //     );
-    //     assert!(
-    //         roll.result <= dice_sides,
-    //         "Numbered dice generator rolls should be <= to the number of sides on the dice"
-    //     );
-    // }
+    #[test]
+    fn numbered_dice_generation() {
+        let dice_sides = 42;
+        let roll_number = 5;
+        let gen = dice::NumberedDice::new(dice_sides);
+        let rolls = gen.roll(roll_number);
+        assert_eq!(rolls.len(), roll_number as usize);
+        for roll in rolls.iter() {
+            assert!(*roll > 0, "Numbered dice generator rolls should be > 0");
+            assert!(
+                *roll <= dice_sides,
+                "Numbered dice generator rolls should be <= to the number of sides on the dice"
+            );
+        }
+    }
 }

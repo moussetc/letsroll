@@ -5,7 +5,7 @@ use std::fmt;
 ///
 /// Generally, this error corresponds to problems parsing the input, or
 /// asking for incompatible actions, or asking an unreasonable amount or rolls
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Error {
     kind: ErrorKind,
 }
@@ -18,6 +18,15 @@ impl Error {
     pub(crate) fn parse<E: error::Error>(err: E) -> Error {
         Error {
             kind: ErrorKind::Parse(err.to_string()),
+        }
+    }
+
+    pub(crate) fn incompatible(action: &String, roll_type: &String) -> Error {
+        Error {
+            kind: ErrorKind::IncompatibleAction(format!(
+                "Action {:?} not supported by roll type {:?}",
+                action, roll_type
+            )),
         }
     }
 
@@ -34,7 +43,7 @@ impl From<std::num::ParseIntError> for Error {
 }
 
 /// The kind of an error that can occur.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ErrorKind {
     /// An error that occurred as a result of parsing a request.
     /// This can be a syntax error.
@@ -46,6 +55,9 @@ pub enum ErrorKind {
     ///
     /// The string here is a detailed explanation of what caused the parsing to fail.
     ParseDice(String),
+
+    /// An error that occurred as a result of trying to apply an action to an incompatible type of rolls.
+    IncompatibleAction(String),
 }
 
 impl error::Error for Error {
@@ -53,6 +65,7 @@ impl error::Error for Error {
         match self.kind {
             ErrorKind::Parse(_) => "Request parsing error",
             ErrorKind::ParseDice(_) => "Dice parsing error",
+            ErrorKind::IncompatibleAction(_) => "Action applying error",
         }
     }
 }
@@ -62,6 +75,7 @@ impl fmt::Display for Error {
         match self.kind {
             ErrorKind::Parse(ref s) => write!(f, "Request parse error: {}", s),
             ErrorKind::ParseDice(ref s) => write!(f, "Dice parsing error: {}", s),
+            ErrorKind::IncompatibleAction(ref s) => write!(f, "Action applying error: {}", s),
         }
     }
 }
