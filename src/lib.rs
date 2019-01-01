@@ -1,13 +1,12 @@
 pub mod actions;
 pub mod dice;
 pub mod errors;
+pub mod io;
 
 use crate::actions::{Action, CountValues, FlipFlop, Identity, MultiplyBy, Reroll, Sum};
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
 use std::collections::HashMap;
-use std::fmt;
-use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct DiceRequest {
@@ -17,50 +16,6 @@ pub struct DiceRequest {
 impl DiceRequest {
     pub fn new(kind: DiceKind, number: DiceNumber) -> DiceRequest {
         DiceRequest { kind, number }
-    }
-}
-
-impl FromStr for DiceRequest {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.ends_with("F") {
-            let number_from_str = s[0..s.len() - 1].parse::<u8>()?;
-            return Ok(DiceRequest {
-                kind: DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())),
-                number: number_from_str,
-            });
-        }
-
-        let parts: Vec<&str> = s.trim().split('D').collect();
-
-        // Try to read a numbered dice request (no other dice implement yet)
-        match parts.len() {
-            1 | 2 => {
-                let mut number_fromstr = parts[0].parse::<u8>()?;
-                let sides_fromstr = parts[parts.len() - 1].parse::<u16>()?;
-                // the number of dice to roll is optional and efaults to 1
-                if parts.len() == 1 {
-                    number_fromstr = 1;
-                }
-                Ok(DiceRequest {
-                    number: number_fromstr,
-                    kind: DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(
-                        sides_fromstr,
-                    ))),
-                })
-            }
-            _ => Err(Error::new(errors::ErrorKind::ParseDice(format!(
-                "Expected no more than two parts but found \"{}\" ",
-                parts.len()
-            )))),
-        }
-    }
-}
-
-impl fmt::Display for DiceRequest {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.number, self.kind,)
     }
 }
 
@@ -95,15 +50,12 @@ impl RollRequest {
         for (dice, rolls) in self.rolls.iter_mut() {
             *rolls = match rolls {
                 Rolls::NumericRolls(num_rolls) => match &dice.kind {
-                    DiceKind::NumericKind(num_dice) => match &num_dice {
-                        NumericDice::NumberedDice(_) | NumericDice::Const(_) => {
-                            match RollRequest::add_step_numeric_input(num_dice, num_rolls, &action)
-                            {
-                                Ok(new_rolls) => new_rolls,
-                                Err(error) => Err(error)?,
-                            }
+                    DiceKind::NumericKind(num_dice) => {
+                        match RollRequest::add_step_numeric_input(num_dice, num_rolls, &action) {
+                            Ok(new_rolls) => new_rolls,
+                            Err(error) => Err(error)?,
                         }
-                    },
+                    }
                     _ => {
                         return Err(Error::incompatible(
                             &action.to_string(),
@@ -112,18 +64,16 @@ impl RollRequest {
                     }
                 },
                 Rolls::TextRolls(text_rolls) => match &dice.kind {
-                    DiceKind::TextKind(text_dice) => match &text_dice {
-                        TextDice::FudgeDice(_) | TextDice::Const(_) => {
-                            match RollRequest::add_step_text_input(text_dice, text_rolls, &action) {
-                                Ok(new_rolls) => new_rolls,
-                                Err(error) => Err(error)?,
-                            }
+                    DiceKind::TextKind(text_dice) => {
+                        match RollRequest::add_step_text_input(text_dice, text_rolls, &action) {
+                            Ok(new_rolls) => new_rolls,
+                            Err(error) => Err(error)?,
                         }
-                    },
+                    }
                     _ => {
                         return Err(Error::incompatible(
                             &action.to_string(),
-                            &String::from("numeric roll"),
+                            &String::from("text roll"),
                         ));
                     }
                 },
@@ -141,10 +91,12 @@ impl RollRequest {
             Action::Identity => Rolls::TextRolls(text_rolls.do_nothing()),
             Action::CountValues => Rolls::NumericRolls(text_rolls.count()),
             Action::RerollText(value_to_reroll) => match dice {
-                TextDice::FudgeDice(ref d) => {
-                    Rolls::TextRolls(text_rolls.reroll(d, &value_to_reroll))
+                TextDice::Const(text_dice) => {
+                    Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
                 }
-                TextDice::Const(ref d) => Rolls::TextRolls(text_rolls.reroll(d, &value_to_reroll)),
+                TextDice::FudgeDice(text_dice) => {
+                    Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
+                }
             },
             _ => {
                 return Err(Error::new(ErrorKind::IncompatibleAction(format!(
@@ -165,12 +117,12 @@ impl RollRequest {
             Action::Identity => num_rolls.do_nothing(),
             Action::CountValues => num_rolls.count(),
             Action::FlipFlop => match dice {
-                NumericDice::NumberedDice(ref d) => num_rolls.flip(d),
-                NumericDice::Const(ref d) => num_rolls.flip(d),
+                NumericDice::Const(dice) => num_rolls.flip(dice),
+                NumericDice::NumberedDice(dice) => num_rolls.flip(dice),
             },
             Action::RerollNumeric(value_to_reroll) => match dice {
-                NumericDice::Const(d) => num_rolls.reroll(d, &value_to_reroll),
-                NumericDice::NumberedDice(ref d) => num_rolls.reroll(d, &value_to_reroll),
+                NumericDice::Const(dice) => num_rolls.reroll(dice, &value_to_reroll),
+                NumericDice::NumberedDice(dice) => num_rolls.reroll(dice, &value_to_reroll),
             },
             Action::MultiplyBy(factor) => num_rolls.multiply(*factor),
             Action::Sum => num_rolls.sum(),
@@ -186,34 +138,6 @@ impl RollRequest {
 
     pub fn results(&self) -> &HashMap<DiceRequest, Rolls> {
         &self.rolls
-    }
-}
-
-impl fmt::Display for RollRequest {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.results()
-                .iter()
-                .map(|keyval| format!("{} : {}|", keyval.0, keyval.1))
-                .collect::<Vec<String>>()
-                .join(" "),
-        )
-    }
-}
-
-impl FromStr for RollRequest {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<DiceRequest> = s
-            .trim()
-            .split(' ')
-            .map(|part| DiceRequest::from_str(part))
-            .collect::<Result<Vec<DiceRequest>, Error>>()?;
-
-        Ok(RollRequest::new(parts))
     }
 }
 

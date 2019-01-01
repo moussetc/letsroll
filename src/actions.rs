@@ -1,4 +1,4 @@
-use crate::dice::GetNumericDiceParameter;
+use crate::dice::GetParam;
 use crate::dice::{NumericRoll, Roll, TextRoll};
 use std::collections::HashMap;
 use std::fmt;
@@ -88,16 +88,16 @@ impl<T: PartialOrd + PartialEq + Clone, V: Roll<RollResult = Vec<T>>> Reroll<T, 
 /// # Examples
 /// - For a D20 roll : 1 -> 10, 15 -> 51, 20 -> 2
 /// - For a D100 roll : 1 -> 100, 15 -> 510, 100 -> 1
-pub trait FlipFlop<T, V: Roll + GetNumericDiceParameter> {
+pub trait FlipFlop<T, V: Roll> {
     fn flip(&self, dice: &V) -> Vec<T>;
 }
 
-impl<V: Roll + GetNumericDiceParameter> FlipFlop<NumericRoll, V> for Vec<NumericRoll> {
+impl<V: Roll + GetParam<Param = NumericRoll>> FlipFlop<NumericRoll, V> for Vec<NumericRoll> {
     fn flip(&self, dice: &V) -> Vec<NumericRoll> {
         self.iter()
             .map(|roll| {
                 // Compute the max padding required for 1 to become 10, 100, etc. according to the dice sides
-                let max_digits = get_digits_number(dice.get_numeric_param() as f32);
+                let max_digits = get_digits_number(dice.get_param() as f32);
                 let result = format!("{:0width$}", roll, width = max_digits)
                     .chars()
                     .rev()
@@ -146,7 +146,7 @@ impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
 #[cfg(test)]
 mod tests {
     use crate::actions::{FlipFlop, Identity, MultiplyBy, Reroll, Sum};
-    use crate::dice::{Const, NumberedDice, NumericRoll, TextRoll};
+    use crate::dice::{Const, NumberedDice, NumericRoll};
 
     static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
 

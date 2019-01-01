@@ -1,61 +1,32 @@
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cell::RefCell;
-use std::fmt;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
-/// Type roll result from numbered dice
 pub type DiceNumber = u8;
+/// Type of roll result for numbered dice (like D20)
 pub type NumericRoll = u16;
+// Type of roll result for text dice (like fudge)
 pub type TextRoll = char;
 
+/// Trait to represent dice that can be rolled to produce values using the [sum](trait.Roll.html#tymethod.roll) method.
 pub trait Roll {
     type RollResult;
     fn roll(&self, n: DiceNumber) -> Self::RollResult;
 }
 
-pub trait GetNumericDiceParameter {
-    fn get_numeric_param(&self) -> NumericRoll;
+/// Get the value that defines a dice (like the number of sides of a numbered dice)
+pub trait GetParam: Roll {
+    type Param;
+    fn get_param(&self) -> Self::Param;
 }
 
+/// Contains a typed dice
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum DiceKind {
     NumericKind(NumericDice),
     TextKind(TextDice),
-}
-
-// impl DiceKind {
-//     pub fn get_dice<T>(&self) -> Box<dyn Dice<RollResult = T>> {
-//         match self {
-//             DiceKind::NumericKind(num_dice) => match num_dice {
-//                 NumericDice::Const(dice) => Box::new(dice) as Box<Dice>,
-//                 NumericDice::NumberedDice(dice) => Box::new(dice) as Box<Dice>,
-//             },
-//             DiceKind::TextKind(text_dice) => match text_dice {
-//                 TextDice::FudgeDice => Box::new(dice) as Box<Dice>,
-//             },
-//         }
-//     }
-// }
-
-impl fmt::Display for DiceKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                DiceKind::NumericKind(num_dice) => match num_dice {
-                    NumericDice::Const(dice) => format!("Const{}", dice.const_value),
-                    NumericDice::NumberedDice(dice) => format!("D{}", dice.sides),
-                },
-                DiceKind::TextKind(text_dice) => match text_dice {
-                    TextDice::FudgeDice(_) => String::from("F"),
-                    TextDice::Const(d) => d.const_value.to_string(),
-                },
-            }
-        )
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -81,6 +52,17 @@ impl Roll for NumericDice {
     }
 }
 
+impl GetParam for NumericDice {
+    type Param = NumericRoll;
+
+    fn get_param(&self) -> NumericRoll {
+        match self {
+            NumericDice::Const(dice) => dice.get_param(),
+            NumericDice::NumberedDice(dice) => dice.get_param(),
+        }
+    }
+}
+
 impl Roll for TextDice {
     type RollResult = Vec<TextRoll>;
 
@@ -96,27 +78,6 @@ pub enum Rolls {
     NumericRolls(Vec<NumericRoll>),
     TextRolls(Vec<TextRoll>),
 }
-impl fmt::Display for Rolls {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Rolls::NumericRolls(rolls) => rolls
-                    .iter()
-                    .map(|roll| roll.to_string())
-                    .collect::<Vec<String>>()
-                    .join(" "),
-                Rolls::TextRolls(rolls) => rolls
-                    .iter()
-                    .map(|roll| roll.to_string())
-                    .collect::<Vec<String>>()
-                    .join(" "),
-            }
-        )
-    }
-}
-
 /// Dice that always return the same value
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -138,8 +99,10 @@ impl<T: Debug + PartialEq + Eq + Hash + Copy> Roll for Const<T> {
     }
 }
 
-impl GetNumericDiceParameter for Const<NumericRoll> {
-    fn get_numeric_param(&self) -> NumericRoll {
+impl<T: Debug + PartialEq + Eq + Hash + Copy> GetParam for Const<T> {
+    type Param = T;
+
+    fn get_param(&self) -> T {
         self.const_value
     }
 }
@@ -156,16 +119,6 @@ impl NumberedDice {
             sides,
             rng_ref: RefCell::new(rand::thread_rng()),
         }
-    }
-
-    pub fn get_sides(&self) -> NumericRoll {
-        self.sides
-    }
-}
-
-impl GetNumericDiceParameter for NumberedDice {
-    fn get_numeric_param(&self) -> NumericRoll {
-        self.sides
     }
 }
 
@@ -185,6 +138,14 @@ impl Roll for NumberedDice {
         (1..n + 1)
             .map(|_| rng.gen_range(1, self.sides + 1))
             .collect()
+    }
+}
+
+impl GetParam for NumberedDice {
+    type Param = NumericRoll;
+
+    fn get_param(&self) -> NumericRoll {
+        self.sides
     }
 }
 
@@ -209,6 +170,7 @@ impl FudgeDice {
 
 impl Roll for FudgeDice {
     type RollResult = Vec<TextRoll>;
+
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
         let mut rng = self.rng_ref.borrow_mut();
         (1..n + 1)
