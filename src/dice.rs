@@ -175,7 +175,7 @@ impl Roll for FudgeDice {
         let mut rng = self.rng_ref.borrow_mut();
         (1..n + 1)
             .map(|_| match rng.gen_range(1, 4) {
-                1 => ' ',
+                1 => '0',
                 2 => '+',
                 _ => '-',
             })
