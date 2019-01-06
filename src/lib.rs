@@ -3,6 +3,7 @@ pub mod dice;
 pub mod errors;
 pub mod io;
 
+pub use crate::actions::Action;
 use crate::actions::*;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
@@ -88,7 +89,7 @@ impl RollRequest {
         action: &actions::Action,
     ) -> Result<(Rolls), Error> {
         Ok(match action {
-            Action::Identity => Rolls::TextRolls(text_rolls.do_nothing()),
+            Action::Identity => Rolls::TextRolls(text_rolls.clone_rolls()),
             Action::CountValues => Rolls::NumericRolls(text_rolls.count()),
             Action::RerollText(value_to_reroll) => match dice {
                 TextDice::ConstDice(text_dice) => {
@@ -117,7 +118,7 @@ impl RollRequest {
         action: &actions::Action,
     ) -> Result<(Rolls), Error> {
         Ok(Rolls::NumericRolls(match action {
-            Action::Identity => num_rolls.do_nothing(),
+            Action::Identity => num_rolls.clone_rolls(),
             Action::CountValues => num_rolls.count(),
             Action::FlipFlop => match dice {
                 NumericDice::ConstDice(dice) => num_rolls.flip(dice),

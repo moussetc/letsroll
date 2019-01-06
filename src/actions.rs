@@ -1,3 +1,9 @@
+//! `actions` is a collection of transformations that can be applied
+//! to dice rolls : adding values, multiplying, computing the sum, etc.
+//!
+//! Some actions are only defined for a kind of roll (for example, you can
+//! sum numeric rolls but not fudge rolls).
+
 use crate::dice::DiceNumber;
 use crate::dice::GetMaxValue;
 use crate::dice::{NumericRoll, Roll, TextRoll};
@@ -6,68 +12,82 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+/// Enumeration of all possible actions
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
+    /// Clone the rolls (cf. trait [Identity](trait.Identity.html)).
     Identity,
+    /// TODO
     CountValues,
+    /// Rerolls the dice for the values equal to the action parameter (numeric rolls only, cf. trait [Reroll](trait.Reroll.html)).
     RerollNumeric(NumericRoll),
+    /// Rerolls the dice for the values equal to the action parameter (fudge rolls only, cf. trait [Reroll](trait.Reroll.html)).
     RerollText(TextRoll),
+    /// Sum the rolls (numeric rolls only, cf. trait [Sum](trait.Sum.html)).
     Sum,
+    /// Multiply the rolls by the action parameter (numeric rolls only, cf. trait [MultiplyBy](trait.MultiplyBy.html)).
     MultiplyBy(NumericRoll),
+    /// Invert the digits of the rolls (numeric rolls only, cf. trait [FlipFlop](trait.FlipFlop.html)).   
     FlipFlop,
+    /// Add new rolls for rolls equal to the highest value possible (numeric rolls only, cf. trait [Explode](trait.Explode.html)).   
     Explode(NumericRoll),
 }
-
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
+/// Action that return a clone of the rolls
+/// # Example
+/// ```
+/// # use letsroll::actions::Identity;
+/// let input_rolls = vec![1,2,3];
+/// assert_eq!(input_rolls.clone_rolls(), vec![1,2,3]);
+/// ```
 pub trait Identity<T> {
-    fn do_nothing(&self) -> T;
+    fn clone_rolls(&self) -> T;
 }
-
 impl Identity<Vec<NumericRoll>> for Vec<NumericRoll> {
-    fn do_nothing(&self) -> Vec<NumericRoll> {
+    fn clone_rolls(&self) -> Vec<NumericRoll> {
         self.iter().map(|roll| roll.clone()).collect()
     }
 }
-
 impl Identity<Vec<TextRoll>> for Vec<TextRoll> {
-    fn do_nothing(&self) -> Vec<TextRoll> {
+    fn clone_rolls(&self) -> Vec<TextRoll> {
         self.iter().map(|roll| roll.clone()).collect()
     }
 }
 
+/// Action that multiply the rolls by a factor
+/// # Example
+/// ```
+/// # use letsroll::actions::MultiplyBy;
+/// let input_rolls = vec![1,2,3];
+/// assert_eq!(input_rolls.multiply(100), vec![100,200,300]);
+/// ```
 pub trait MultiplyBy<T> {
     fn multiply(&self, factor: NumericRoll) -> T;
 }
-
 impl MultiplyBy<Vec<NumericRoll>> for Vec<NumericRoll> {
     fn multiply(&self, factor: NumericRoll) -> Vec<NumericRoll> {
         self.iter().map(|roll| roll * factor).collect()
     }
 }
 
-pub trait CountValues<T> {
-    fn count(&self) -> T;
-}
-
-impl<T: Hash + Eq> CountValues<Vec<NumericRoll>> for Vec<T> {
-    fn count(&self) -> Vec<NumericRoll> {
-        let mut set: HashMap<&T, NumericRoll> = HashMap::new();
-        for roll in self.iter() {
-            set.entry(roll).and_modify(|count| *count += 1).or_insert(0);
-        }
-        set.iter().map(|keyval| *keyval.1).collect()
-    }
-}
-
+/// Replace the rolls equal to the given value by a new roll
+/// # Example
+/// ```
+/// # use letsroll::actions::Reroll;
+/// # use letsroll::dice::ConstDice;
+/// let mut input_rolls = vec![1,2,3];
+/// let dice = ConstDice::new(42);
+/// assert_eq!(input_rolls.reroll(&dice, &3), vec![1,2,42]);
+/// ```
+// TODO should the new roll be suject to the same action ?
 pub trait Reroll<T: PartialOrd + PartialEq, V: Roll> {
     fn reroll(&mut self, dice: &V, t: &T) -> Vec<T>;
 }
-
 impl<T: PartialOrd + PartialEq + Clone, V: Roll<RollResult = Vec<T>>> Reroll<T, V> for Vec<T> {
     fn reroll(&mut self, dice: &V, t: &T) -> Vec<T> {
         let mut new_rolls: Vec<T> = vec![];
@@ -82,19 +102,27 @@ impl<T: PartialOrd + PartialEq + Clone, V: Roll<RollResult = Vec<T>>> Reroll<T, 
     }
 }
 
-// pub trait Aggregate {
-//     fn aggregate(rolls: &Vec<Rolls>) -> Option<Rolls>;
-// }
-
 /// Flip the digits of a numbered dice roll.
-///
-/// # Examples
-/// - For a D20 roll : 1 -> 10, 15 -> 51, 20 -> 2
-/// - For a D100 roll : 1 -> 100, 15 -> 510, 100 -> 1
+/// # Example
+/// Let's simulate a D20 flipflop:
+/// ```
+/// # use letsroll::actions::FlipFlop;
+/// # use letsroll::dice::ConstDice;
+/// let mut input_rolls = vec![1,15,20];
+/// let dice = ConstDice::new(20);
+/// assert_eq!(input_rolls.flip(&dice), vec![10,51,2]);
+/// ```
+/// And now a D100 flipflop:
+/// ```
+/// # use letsroll::actions::FlipFlop;
+/// # use letsroll::dice::ConstDice;
+/// let mut input_rolls = vec![1,15,20];
+/// let dice = ConstDice::new(100);
+/// assert_eq!(input_rolls.flip(&dice), vec![100,510,20]);
+/// ```
 pub trait FlipFlop<T, V: Roll> {
     fn flip(&self, dice: &V) -> Vec<T>;
 }
-
 impl<V: Roll + GetMaxValue> FlipFlop<NumericRoll, V> for Vec<NumericRoll> {
     fn flip(&self, dice: &V) -> Vec<NumericRoll> {
         self.iter()
@@ -111,14 +139,21 @@ impl<V: Roll + GetMaxValue> FlipFlop<NumericRoll, V> for Vec<NumericRoll> {
             .collect()
     }
 }
-
 fn get_digits_number(n: f32) -> usize {
     (f32::log10(n) + 1f32) as usize
 }
 
-/// Return the sums of rolls for each different dice kind
+/// Return the sum of numeric rolls
 ///
-/// To get the total sum regardless of dice kind, use [TotalSum](struct.TotalSum.html)
+/// # Example
+/// ```
+/// # use letsroll::actions::Sum;
+/// let input_rolls = vec![1,2,3];
+/// assert_eq!(input_rolls.sum(), vec![6]);
+/// ```
+///
+/// # Remark
+/// This kind of action is only applied to the results rolls of once dice. To get the total sum of all dice, see [TotalSum](struct.TotalSum.html)
 pub trait Sum<T> {
     fn sum(&self) -> T;
 }
@@ -129,16 +164,24 @@ impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
 }
 
 /// Explode rerolls the dice whenever the highest value is rolled.
+/// The new rolls can also trigger an explosion.
 ///
 /// # Example
-/// Roll 4D6 -> [2,6,3,6] -> reroll two D6 -> [2,6,3,6] + [5,6] -> reroll one D6 -> [2,6,3,6] + [5,6] + [1] = [2,6,3,6,5,6,1]
-///
+/// ```
+/// # use letsroll::actions::Explode;
+/// # use letsroll::dice::ConstDice;
+/// let input_rolls = vec![1, 2, 3];
+/// let dice = ConstDice::new(4);
+/// assert_eq!(
+///     input_rolls.explode(&dice, &2),
+///     vec![1,2,3,4]
+/// );
+/// ```
 /// # Warning
-/// Don't use on a [ConstDice](../dice/struct.ConstDice.html): it would end in stack overflow since the highest value=only value will always be rerolled
+/// Don't use on a [ConstDice](../dice/struct.ConstDice.html) result with the same ConstDice for rerolls: it would end in stack overflow since the highest value=only value will always be rerolled
 pub trait Explode<T, V: Roll> {
     fn explode(&self, dice: &V, explosion_value: &T) -> Vec<T>;
 }
-
 impl<T: PartialEq + Copy + Debug, V: Roll<RollResult = Vec<T>>> Explode<T, V> for Vec<T> {
     fn explode(&self, dice: &V, explosion_value: &T) -> Vec<T> {
         if self.len() == 0 {
@@ -154,6 +197,9 @@ impl<T: PartialEq + Copy + Debug, V: Roll<RollResult = Vec<T>>> Explode<T, V> fo
     }
 }
 
+// pub trait Aggregate {
+//     fn aggregate(rolls: &Vec<Rolls>) -> Option<Rolls>;
+// }
 // /// Return a single sum of all rolls, regardless of dice kind
 // ///
 // /// To get the sums of each kind of dice separately, use [Sum](struct.Sum.html)
@@ -172,6 +218,20 @@ impl<T: PartialEq + Copy + Debug, V: Roll<RollResult = Vec<T>>> Explode<T, V> fo
 //     }
 // }
 
+/// TODO ???
+pub trait CountValues<T> {
+    fn count(&self) -> T;
+}
+impl<T: Hash + Eq> CountValues<Vec<NumericRoll>> for Vec<T> {
+    fn count(&self) -> Vec<NumericRoll> {
+        let mut set: HashMap<&T, NumericRoll> = HashMap::new();
+        for roll in self.iter() {
+            set.entry(roll).and_modify(|count| *count += 1).or_insert(0);
+        }
+        set.iter().map(|keyval| *keyval.1).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::actions::*;
@@ -182,7 +242,7 @@ mod tests {
     #[test]
     fn transform_identity() {
         let input = NUM_INPUT.to_vec();
-        let output = input.do_nothing();
+        let output = input.clone_rolls();
         let expected = &input;
         assert_eq!(output.len(), expected.len());
         for i in 0..expected.len() - 1 {
