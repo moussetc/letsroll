@@ -1,7 +1,9 @@
-use crate::dice::GetParam;
+use crate::dice::DiceNumber;
+use crate::dice::GetMaxValue;
 use crate::dice::{NumericRoll, Roll, TextRoll};
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -13,6 +15,7 @@ pub enum Action {
     Sum,
     MultiplyBy(NumericRoll),
     FlipFlop,
+    Explode(NumericRoll),
 }
 
 impl fmt::Display for Action {
@@ -92,12 +95,12 @@ pub trait FlipFlop<T, V: Roll> {
     fn flip(&self, dice: &V) -> Vec<T>;
 }
 
-impl<V: Roll + GetParam<Param = NumericRoll>> FlipFlop<NumericRoll, V> for Vec<NumericRoll> {
+impl<V: Roll + GetMaxValue> FlipFlop<NumericRoll, V> for Vec<NumericRoll> {
     fn flip(&self, dice: &V) -> Vec<NumericRoll> {
         self.iter()
             .map(|roll| {
                 // Compute the max padding required for 1 to become 10, 100, etc. according to the dice sides
-                let max_digits = get_digits_number(dice.get_param() as f32);
+                let max_digits = get_digits_number(dice.get_max_value() as f32);
                 let result = format!("{:0width$}", roll, width = max_digits)
                     .chars()
                     .rev()
@@ -125,6 +128,32 @@ impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
     }
 }
 
+/// Explode rerolls the dice whenever the highest value is rolled.
+///
+/// # Example
+/// Roll 4D6 -> [2,6,3,6] -> reroll two D6 -> [2,6,3,6] + [5,6] -> reroll one D6 -> [2,6,3,6] + [5,6] + [1] = [2,6,3,6,5,6,1]
+///
+/// # Warning
+/// Don't use on a [ConstDice](../dice/struct.ConstDice.html): it would end in stack overflow since the highest value=only value will always be rerolled
+pub trait Explode<T, V: Roll> {
+    fn explode(&self, dice: &V, explosion_value: &T) -> Vec<T>;
+}
+
+impl<T: PartialEq + Copy + Debug, V: Roll<RollResult = Vec<T>>> Explode<T, V> for Vec<T> {
+    fn explode(&self, dice: &V, explosion_value: &T) -> Vec<T> {
+        if self.len() == 0 {
+            return vec![];
+        }
+
+        let new_rolls: Vec<T> =
+            dice.roll(self.iter().filter(|roll| *roll == explosion_value).count() as DiceNumber);
+
+        let mut rolls = self.clone();
+        rolls.append(&mut new_rolls.explode(dice, explosion_value));
+        rolls
+    }
+}
+
 // /// Return a single sum of all rolls, regardless of dice kind
 // ///
 // /// To get the sums of each kind of dice separately, use [Sum](struct.Sum.html)
@@ -145,8 +174,8 @@ impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
 
 #[cfg(test)]
 mod tests {
-    use crate::actions::{FlipFlop, Identity, MultiplyBy, Reroll, Sum};
-    use crate::dice::{Const, NumberedDice, NumericRoll};
+    use crate::actions::*;
+    use crate::dice::{ConstDice, NumberedDice, NumericRoll, RepeatingDice};
 
     static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
 
@@ -204,7 +233,7 @@ mod tests {
     #[test]
     fn transform_reroll_num() {
         let mut input = NUM_INPUT.to_vec();
-        let output = input.reroll(&Const::new(42), &1);
+        let output = input.reroll(&ConstDice::new(42), &1);
         let expected = vec![42, 42, 42, 15, 100];
         assert_eq!(output.len(), expected.len());
         for i in 0..expected.len() - 1 {
@@ -215,8 +244,20 @@ mod tests {
     #[test]
     fn transform_reroll_text() {
         let mut input = vec![' ', '+', '-', '+', '-'];
-        let output = input.reroll(&Const::new(' '), &'-');
+        let output = input.reroll(&ConstDice::new(' '), &'-');
         let expected = vec![' ', '+', ' ', '+', ' '];
+        assert_eq!(output.len(), expected.len());
+        for i in 0..expected.len() - 1 {
+            assert_eq!(output[i], expected[i]);
+        }
+    }
+
+    #[test]
+    fn transform_explode() {
+        let input = vec![1, 2, 3, 2, 1];
+        let dice = RepeatingDice::new(vec![1, 2]).unwrap();
+        let output = input.explode(&dice, &2);
+        let expected = vec![1, 2, 3, 2, 1, 1, 2, 1];
         assert_eq!(output.len(), expected.len());
         for i in 0..expected.len() - 1 {
             assert_eq!(output[i], expected[i]);

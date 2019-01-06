@@ -58,6 +58,9 @@ pub enum ErrorKind {
 
     /// An error that occurred as a result of trying to apply an action to an incompatible type of rolls.
     IncompatibleAction(String),
+
+    // Occurs when dice initialization fails because of bad parameters
+    BadDice(String),
 }
 
 impl error::Error for Error {
@@ -66,6 +69,7 @@ impl error::Error for Error {
             ErrorKind::Parse(_) => "Request parsing error",
             ErrorKind::ParseDice(_) => "Dice parsing error",
             ErrorKind::IncompatibleAction(_) => "Action applying error",
+            ErrorKind::BadDice(_) => "Dice creation error",
         }
     }
 }
@@ -76,6 +80,7 @@ impl fmt::Display for Error {
             ErrorKind::Parse(ref s) => write!(f, "Request parse error: {}", s),
             ErrorKind::ParseDice(ref s) => write!(f, "Dice parsing error: {}", s),
             ErrorKind::IncompatibleAction(ref s) => write!(f, "Action applying error: {}", s),
+            ErrorKind::BadDice(ref s) => write!(f, "Dice creation error: {}", s),
         }
     }
 }

@@ -3,7 +3,7 @@ pub mod dice;
 pub mod errors;
 pub mod io;
 
-use crate::actions::{Action, CountValues, FlipFlop, Identity, MultiplyBy, Reroll, Sum};
+use crate::actions::*;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
 use std::collections::HashMap;
@@ -91,10 +91,13 @@ impl RollRequest {
             Action::Identity => Rolls::TextRolls(text_rolls.do_nothing()),
             Action::CountValues => Rolls::NumericRolls(text_rolls.count()),
             Action::RerollText(value_to_reroll) => match dice {
-                TextDice::Const(text_dice) => {
+                TextDice::ConstDice(text_dice) => {
                     Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
                 }
                 TextDice::FudgeDice(text_dice) => {
+                    Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
+                }
+                TextDice::RepeatingDice(text_dice) => {
                     Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
                 }
             },
@@ -117,12 +120,19 @@ impl RollRequest {
             Action::Identity => num_rolls.do_nothing(),
             Action::CountValues => num_rolls.count(),
             Action::FlipFlop => match dice {
-                NumericDice::Const(dice) => num_rolls.flip(dice),
+                NumericDice::ConstDice(dice) => num_rolls.flip(dice),
                 NumericDice::NumberedDice(dice) => num_rolls.flip(dice),
+                NumericDice::RepeatingDice(dice) => num_rolls.flip(dice),
             },
             Action::RerollNumeric(value_to_reroll) => match dice {
-                NumericDice::Const(dice) => num_rolls.reroll(dice, &value_to_reroll),
+                NumericDice::ConstDice(dice) => num_rolls.reroll(dice, &value_to_reroll),
                 NumericDice::NumberedDice(dice) => num_rolls.reroll(dice, &value_to_reroll),
+                NumericDice::RepeatingDice(dice) => num_rolls.reroll(dice, &value_to_reroll),
+            },
+            Action::Explode(explosion_value) => match dice {
+                NumericDice::ConstDice(dice) => num_rolls.explode(dice, &explosion_value),
+                NumericDice::NumberedDice(dice) => num_rolls.explode(dice, &explosion_value),
+                NumericDice::RepeatingDice(dice) => num_rolls.explode(dice, &explosion_value),
             },
             Action::MultiplyBy(factor) => num_rolls.multiply(*factor),
             Action::Sum => num_rolls.sum(),
@@ -144,7 +154,7 @@ impl RollRequest {
 #[cfg(test)]
 mod tests {
     use crate::actions::Action;
-    use crate::dice::{Const, DiceKind, FudgeDice, NumberedDice, NumericDice, TextDice};
+    use crate::dice::{ConstDice, DiceKind, FudgeDice, NumberedDice, NumericDice, TextDice};
     use crate::DiceRequest;
 
     #[test]
@@ -200,7 +210,7 @@ mod tests {
         let mut dice_requests = vec![];
         if test_num_types {
             dice_requests.push(DiceRequest::new(
-                DiceKind::NumericKind(NumericDice::Const(Const::new(dice_val))),
+                DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(dice_val))),
                 dice_number,
             ));
             dice_requests.push(DiceRequest::new(

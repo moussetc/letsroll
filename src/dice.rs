@@ -3,6 +3,9 @@ use rand::Rng;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use std::iter;
+
+use crate::errors::{Error, ErrorKind};
 
 pub type DiceNumber = u8;
 /// Type of roll result for numbered dice (like D20)
@@ -16,10 +19,9 @@ pub trait Roll {
     fn roll(&self, n: DiceNumber) -> Self::RollResult;
 }
 
-/// Get the value that defines a dice (like the number of sides of a numbered dice)
-pub trait GetParam: Roll {
-    type Param;
-    fn get_param(&self) -> Self::Param;
+/// Get the max value of a numeric dice (for example, the number of sides of a numbered dice)
+pub trait GetMaxValue: Roll {
+    fn get_max_value(&self) -> NumericRoll;
 }
 
 /// Contains a typed dice
@@ -31,14 +33,16 @@ pub enum DiceKind {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum NumericDice {
-    Const(Const<NumericRoll>),
+    ConstDice(ConstDice<NumericRoll>),
     NumberedDice(NumberedDice),
+    RepeatingDice(RepeatingDice<NumericRoll>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum TextDice {
     FudgeDice(FudgeDice),
-    Const(Const<TextRoll>),
+    ConstDice(ConstDice<TextRoll>),
+    RepeatingDice(RepeatingDice<TextRoll>),
 }
 
 impl Roll for NumericDice {
@@ -46,19 +50,19 @@ impl Roll for NumericDice {
 
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
         match self {
-            NumericDice::Const(dice) => dice.roll(n),
+            NumericDice::ConstDice(dice) => dice.roll(n),
             NumericDice::NumberedDice(dice) => dice.roll(n),
+            NumericDice::RepeatingDice(dice) => dice.roll(n),
         }
     }
 }
 
-impl GetParam for NumericDice {
-    type Param = NumericRoll;
-
-    fn get_param(&self) -> NumericRoll {
+impl GetMaxValue for NumericDice {
+    fn get_max_value(&self) -> NumericRoll {
         match self {
-            NumericDice::Const(dice) => dice.get_param(),
-            NumericDice::NumberedDice(dice) => dice.get_param(),
+            NumericDice::ConstDice(dice) => dice.get_max_value(),
+            NumericDice::NumberedDice(dice) => dice.get_max_value(),
+            NumericDice::RepeatingDice(dice) => dice.get_max_value(),
         }
     }
 }
@@ -69,7 +73,8 @@ impl Roll for TextDice {
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
         match self {
             TextDice::FudgeDice(dice) => dice.roll(n),
-            TextDice::Const(dice) => dice.roll(n),
+            TextDice::ConstDice(dice) => dice.roll(n),
+            TextDice::RepeatingDice(dice) => dice.roll(n),
         }
     }
 }
@@ -79,31 +84,66 @@ pub enum Rolls {
     TextRolls(Vec<TextRoll>),
 }
 /// Dice that always return the same value
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct Const<T: Debug + PartialEq + Eq + Hash> {
+pub struct ConstDice<T: Debug + PartialEq + Eq + Hash> {
     pub(crate) const_value: T,
 }
 
-impl<T: Debug + PartialEq + Eq + Hash> Const<T> {
-    pub fn new(const_value: T) -> Const<T> {
-        Const { const_value }
+impl<T: Debug + PartialEq + Eq + Hash> ConstDice<T> {
+    pub fn new(const_value: T) -> ConstDice<T> {
+        ConstDice { const_value }
     }
 }
 
-impl<T: Debug + PartialEq + Eq + Hash + Copy> Roll for Const<T> {
+impl<T: Debug + PartialEq + Eq + Hash + Copy> Roll for ConstDice<T> {
     type RollResult = Vec<T>;
 
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
-        (1..n + 1).map(|_| self.const_value).collect()
+        iter::repeat(self.const_value).take(n as usize).collect()
     }
 }
 
-impl<T: Debug + PartialEq + Eq + Hash + Copy> GetParam for Const<T> {
-    type Param = T;
-
-    fn get_param(&self) -> T {
+impl GetMaxValue for ConstDice<NumericRoll> {
+    fn get_max_value(&self) -> NumericRoll {
         self.const_value
+    }
+}
+
+/// Dice that return the same list of values
+///
+/// Useful for tests
+#[doc(hidden)]
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct RepeatingDice<T: Debug + PartialEq + Eq + Hash> {
+    pub(crate) values: Vec<T>,
+}
+
+impl<T: Debug + PartialEq + Eq + Hash> RepeatingDice<T> {
+    pub fn new(values: Vec<T>) -> Result<RepeatingDice<T>, Error> {
+        match values.len() {
+            0 => Err(Error::new(ErrorKind::BadDice(String::from(
+                "Can't create a repeating dice with an empty values list",
+            )))),
+            _ => Ok(RepeatingDice { values }),
+        }
+    }
+}
+
+impl<T: Debug + PartialEq + Eq + Hash + Copy> Roll for RepeatingDice<T> {
+    type RollResult = Vec<T>;
+
+    fn roll(&self, n: DiceNumber) -> Self::RollResult {
+        let mut repeat_values = self.values.clone();
+        for _ in 0..(n as usize / self.values.len()) {
+            repeat_values.append(&mut self.values.clone());
+        }
+        repeat_values[0..(n as usize)].to_vec()
+    }
+}
+
+impl GetMaxValue for RepeatingDice<NumericRoll> {
+    fn get_max_value(&self) -> NumericRoll {
+        *self.values.iter().max().unwrap_or(&(0 as NumericRoll))
     }
 }
 
@@ -141,10 +181,8 @@ impl Roll for NumberedDice {
     }
 }
 
-impl GetParam for NumberedDice {
-    type Param = NumericRoll;
-
-    fn get_param(&self) -> NumericRoll {
+impl GetMaxValue for NumberedDice {
+    fn get_max_value(&self) -> NumericRoll {
         self.sides
     }
 }
@@ -200,19 +238,17 @@ impl Hash for FudgeDice {
 
 #[cfg(test)]
 mod tests {
-    use crate::dice::{
-        self, Const, DiceKind, FudgeDice, NumberedDice, NumericDice, Roll, TextDice,
-    };
+    use crate::dice::*;
 
     #[test]
     fn dice_kind_comparison() {
         assert_eq!(
-            NumericDice::Const(Const::new(10)),
-            NumericDice::Const(Const::new(10))
+            NumericDice::ConstDice(ConstDice::new(10)),
+            NumericDice::ConstDice(ConstDice::new(10))
         );
         assert_ne!(
-            NumericDice::Const(Const::new(10)),
-            NumericDice::Const(Const::new(20))
+            NumericDice::ConstDice(ConstDice::new(10)),
+            NumericDice::ConstDice(ConstDice::new(20))
         );
         assert_eq!(
             NumericDice::NumberedDice(NumberedDice::new(10)),
@@ -224,7 +260,7 @@ mod tests {
         );
         assert_ne!(
             NumericDice::NumberedDice(NumberedDice::new(10)),
-            NumericDice::Const(Const::new(10))
+            NumericDice::ConstDice(ConstDice::new(10))
         );
         assert_eq!(FudgeDice::new(), FudgeDice::new());
         assert_eq!(
@@ -233,7 +269,7 @@ mod tests {
         );
         assert_ne!(
             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
-            DiceKind::NumericKind(NumericDice::Const(Const::new(10)))
+            DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(10)))
         );
         assert_ne!(
             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
@@ -245,7 +281,7 @@ mod tests {
     fn const_generation() {
         let const_value = 42;
         let roll_number = 5;
-        let gen = Const::new(const_value);
+        let gen = ConstDice::new(const_value);
         let rolls = gen.roll(roll_number);
         assert_eq!(rolls.len(), roll_number as usize);
         for roll in rolls.iter() {
@@ -257,7 +293,7 @@ mod tests {
     fn numbered_dice_generation() {
         let dice_sides = 42;
         let roll_number = 5;
-        let gen = dice::NumberedDice::new(dice_sides);
+        let gen = NumberedDice::new(dice_sides);
         let rolls = gen.roll(roll_number);
         assert_eq!(rolls.len(), roll_number as usize);
         for roll in rolls.iter() {
@@ -266,6 +302,33 @@ mod tests {
                 *roll <= dice_sides,
                 "Numbered dice generator rolls should be <= to the number of sides on the dice"
             );
+        }
+    }
+
+    #[test]
+    fn repeating_dice() {
+        let dice = RepeatingDice::new(vec![1, 2, 3, 4, 5]);
+        match dice {
+            Err(_) => assert!(false),
+            Ok(dice) => {
+                assert_eq!(dice.roll(0), vec![]);
+                assert_eq!(dice.roll(3), vec![1, 2, 3]);
+                assert_eq!(dice.roll(5), vec![1, 2, 3, 4, 5]);
+                assert_eq!(
+                    dice.roll(15),
+                    vec![1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_dice_empty() {
+        let empty_value: Vec<NumericRoll> = vec![];
+        let dice = RepeatingDice::new(empty_value);
+        match dice {
+            Err(_) => assert!(true),
+            Ok(_) => assert!(false),
         }
     }
 }

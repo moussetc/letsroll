@@ -22,7 +22,9 @@ impl FromStr for DiceRequest {
         if s.starts_with("+") {
             let number_from_str = s[..s.len()].parse::<NumericRoll>()?;
             return Ok(DiceRequest {
-                kind: DiceKind::NumericKind(NumericDice::Const(Const::new(number_from_str))),
+                kind: DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(
+                    number_from_str,
+                ))),
                 number: 1,
             });
         }
@@ -122,12 +124,26 @@ impl fmt::Display for DiceKind {
             "{}",
             match self {
                 DiceKind::NumericKind(num_dice) => match num_dice {
-                    NumericDice::Const(dice) => format!("x{}", dice.const_value),
-                    NumericDice::NumberedDice(dice) => format!("D{}", dice.get_param()),
+                    NumericDice::ConstDice(dice) => format!("+{}", dice.const_value),
+                    NumericDice::NumberedDice(dice) => format!("D{}", dice.get_max_value()),
+                    NumericDice::RepeatingDice(dice) => format!(
+                        "[{},...]",
+                        dice.values
+                            .iter()
+                            .map(|val| val.to_string())
+                            .collect::<String>()
+                    ),
                 },
                 DiceKind::TextKind(text_dice) => match text_dice {
                     TextDice::FudgeDice(_) => String::from("F"),
-                    TextDice::Const(d) => d.const_value.to_string(),
+                    TextDice::ConstDice(d) => d.const_value.to_string(),
+                    TextDice::RepeatingDice(dice) => format!(
+                        "[{},...]",
+                        dice.values
+                            .iter()
+                            .map(|val| val.to_string())
+                            .collect::<String>()
+                    ),
                 },
             }
         )
