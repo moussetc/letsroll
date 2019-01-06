@@ -21,6 +21,12 @@ impl Error {
         }
     }
 
+    pub(crate) fn file<E: error::Error>(err: E) -> Error {
+        Error {
+            kind: ErrorKind::File(err.to_string()),
+        }
+    }
+
     pub(crate) fn incompatible(action: &String, roll_type: &String) -> Error {
         Error {
             kind: ErrorKind::IncompatibleAction(format!(
@@ -39,6 +45,12 @@ impl Error {
 impl From<std::num::ParseIntError> for Error {
     fn from(error: std::num::ParseIntError) -> Self {
         Error::parse(error)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Error::file(error)
     }
 }
 
@@ -61,6 +73,9 @@ pub enum ErrorKind {
 
     // Occurs when dice initialization fails because of bad parameters
     BadDice(String),
+
+    // Occurs when file operations fail
+    File(String),
 }
 
 impl error::Error for Error {
@@ -70,6 +85,7 @@ impl error::Error for Error {
             ErrorKind::ParseDice(_) => "Dice parsing error",
             ErrorKind::IncompatibleAction(_) => "Action applying error",
             ErrorKind::BadDice(_) => "Dice creation error",
+            ErrorKind::File(_) => "File operation error",
         }
     }
 }
@@ -81,6 +97,7 @@ impl fmt::Display for Error {
             ErrorKind::ParseDice(ref s) => write!(f, "Dice parsing error: {}", s),
             ErrorKind::IncompatibleAction(ref s) => write!(f, "Action applying error: {}", s),
             ErrorKind::BadDice(ref s) => write!(f, "Dice creation error: {}", s),
+            ErrorKind::File(ref s) => write!(f, "File operation error: {}", s),
         }
     }
 }
