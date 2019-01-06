@@ -117,7 +117,6 @@ impl GetMaxValue for ConstDice<NumericRoll> {
 /// Dice that return the same list of values
 ///
 /// Useful for tests
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct RepeatingDice<T: Debug + PartialEq + Eq + Hash> {
     pub(crate) values: Vec<T>,
