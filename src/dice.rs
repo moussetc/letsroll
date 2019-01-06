@@ -10,8 +10,13 @@ use crate::errors::{Error, ErrorKind};
 pub type DiceNumber = u8;
 /// Type of roll result for numbered dice (like D20)
 pub type NumericRoll = u16;
-// Type of roll result for text dice (like fudge)
-pub type TextRoll = char;
+// Type of roll result for fudge dice (fate)
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+pub enum FudgeRoll {
+    Plus,
+    Minus,
+    Blank,
+}
 
 /// Trait to represent dice that can be rolled to produce values using the [sum](trait.Roll.html#tymethod.roll) method.
 pub trait Roll {
@@ -41,8 +46,8 @@ pub enum NumericDice {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum TextDice {
     FudgeDice(FudgeDice),
-    ConstDice(ConstDice<TextRoll>),
-    RepeatingDice(RepeatingDice<TextRoll>),
+    ConstDice(ConstDice<FudgeRoll>),
+    RepeatingDice(RepeatingDice<FudgeRoll>),
 }
 
 impl Roll for NumericDice {
@@ -68,7 +73,7 @@ impl GetMaxValue for NumericDice {
 }
 
 impl Roll for TextDice {
-    type RollResult = Vec<TextRoll>;
+    type RollResult = Vec<FudgeRoll>;
 
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
         match self {
@@ -81,7 +86,7 @@ impl Roll for TextDice {
 
 pub enum Rolls {
     NumericRolls(Vec<NumericRoll>),
-    TextRolls(Vec<TextRoll>),
+    FudgeRolls(Vec<FudgeRoll>),
 }
 /// Dice that always return the same value
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -207,15 +212,15 @@ impl FudgeDice {
 }
 
 impl Roll for FudgeDice {
-    type RollResult = Vec<TextRoll>;
+    type RollResult = Vec<FudgeRoll>;
 
     fn roll(&self, n: DiceNumber) -> Self::RollResult {
         let mut rng = self.rng_ref.borrow_mut();
         (1..n + 1)
             .map(|_| match rng.gen_range(1, 4) {
-                1 => '0',
-                2 => '+',
-                _ => '-',
+                1 => FudgeRoll::Blank,
+                2 => FudgeRoll::Plus,
+                _ => FudgeRoll::Minus,
             })
             .collect()
     }

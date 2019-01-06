@@ -2,6 +2,7 @@ use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
 use crate::{DiceRequest, RollRequest};
 use std::fmt;
+use std::fmt::Display;
 use std::str::FromStr;
 
 impl FromStr for DiceRequest {
@@ -107,7 +108,7 @@ impl fmt::Display for Rolls {
                     .map(|roll| roll.to_string())
                     .collect::<Vec<String>>()
                     .join(" "),
-                Rolls::TextRolls(rolls) => rolls
+                Rolls::FudgeRolls(rolls) => rolls
                     .iter()
                     .map(|roll| roll.to_string())
                     .collect::<Vec<String>>()
@@ -145,6 +146,20 @@ impl fmt::Display for DiceKind {
                             .collect::<String>()
                     ),
                 },
+            }
+        )
+    }
+}
+
+impl Display for FudgeRoll {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FudgeRoll::Blank => '0',
+                FudgeRoll::Plus => '+',
+                FudgeRoll::Minus => '-',
             }
         )
     }

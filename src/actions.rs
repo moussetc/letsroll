@@ -6,7 +6,7 @@
 
 use crate::dice::DiceNumber;
 use crate::dice::GetMaxValue;
-use crate::dice::{NumericRoll, Roll, TextRoll};
+use crate::dice::{FudgeRoll, NumericRoll, Roll};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
@@ -22,7 +22,7 @@ pub enum Action {
     /// Rerolls the dice for the values equal to the action parameter (numeric rolls only, cf. trait [Reroll](trait.Reroll.html)).
     RerollNumeric(NumericRoll),
     /// Rerolls the dice for the values equal to the action parameter (fudge rolls only, cf. trait [Reroll](trait.Reroll.html)).
-    RerollText(TextRoll),
+    RerollFudge(FudgeRoll),
     /// Sum the rolls (numeric rolls only, cf. trait [Sum](trait.Sum.html)).
     Sum,
     /// Multiply the rolls by the action parameter (numeric rolls only, cf. trait [MultiplyBy](trait.MultiplyBy.html)).
@@ -53,8 +53,8 @@ impl Identity<Vec<NumericRoll>> for Vec<NumericRoll> {
         self.iter().map(|roll| roll.clone()).collect()
     }
 }
-impl Identity<Vec<TextRoll>> for Vec<TextRoll> {
-    fn clone_rolls(&self) -> Vec<TextRoll> {
+impl Identity<Vec<FudgeRoll>> for Vec<FudgeRoll> {
+    fn clone_rolls(&self) -> Vec<FudgeRoll> {
         self.iter().map(|roll| roll.clone()).collect()
     }
 }
@@ -85,10 +85,10 @@ impl MultiplyBy<Vec<NumericRoll>> for Vec<NumericRoll> {
 /// assert_eq!(input_rolls.reroll(&dice, &3), vec![1,2,42]);
 /// ```
 // TODO should the new roll be suject to the same action ?
-pub trait Reroll<T: PartialOrd + PartialEq, V: Roll> {
+pub trait Reroll<T: PartialEq, V: Roll> {
     fn reroll(&mut self, dice: &V, t: &T) -> Vec<T>;
 }
-impl<T: PartialOrd + PartialEq + Clone, V: Roll<RollResult = Vec<T>>> Reroll<T, V> for Vec<T> {
+impl<T: PartialEq + Clone, V: Roll<RollResult = Vec<T>>> Reroll<T, V> for Vec<T> {
     fn reroll(&mut self, dice: &V, t: &T) -> Vec<T> {
         let mut new_rolls: Vec<T> = vec![];
         for roll in self.iter() {

@@ -38,7 +38,7 @@ impl RollRequest {
                         Rolls::NumericRolls(num_dice.roll(dice.number))
                     }
                     DiceKind::TextKind(ref mut text_dice) => {
-                        Rolls::TextRolls(text_dice.roll(dice.number))
+                        Rolls::FudgeRolls(text_dice.roll(dice.number))
                     }
                 };
                 request.rolls.insert(dice, rolls);
@@ -64,7 +64,7 @@ impl RollRequest {
                         ));
                     }
                 },
-                Rolls::TextRolls(text_rolls) => match &dice.kind {
+                Rolls::FudgeRolls(text_rolls) => match &dice.kind {
                     DiceKind::TextKind(text_dice) => {
                         match RollRequest::add_step_text_input(text_dice, text_rolls, &action) {
                             Ok(new_rolls) => new_rolls,
@@ -85,21 +85,21 @@ impl RollRequest {
 
     fn add_step_text_input(
         dice: &TextDice,
-        text_rolls: &mut Vec<TextRoll>,
+        text_rolls: &mut Vec<FudgeRoll>,
         action: &actions::Action,
     ) -> Result<(Rolls), Error> {
         Ok(match action {
-            Action::Identity => Rolls::TextRolls(text_rolls.clone_rolls()),
+            Action::Identity => Rolls::FudgeRolls(text_rolls.clone_rolls()),
             Action::CountValues => Rolls::NumericRolls(text_rolls.count()),
-            Action::RerollText(value_to_reroll) => match dice {
+            Action::RerollFudge(value_to_reroll) => match dice {
                 TextDice::ConstDice(text_dice) => {
-                    Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
+                    Rolls::FudgeRolls(text_rolls.reroll(text_dice, &value_to_reroll))
                 }
                 TextDice::FudgeDice(text_dice) => {
-                    Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
+                    Rolls::FudgeRolls(text_rolls.reroll(text_dice, &value_to_reroll))
                 }
                 TextDice::RepeatingDice(text_dice) => {
-                    Rolls::TextRolls(text_rolls.reroll(text_dice, &value_to_reroll))
+                    Rolls::FudgeRolls(text_rolls.reroll(text_dice, &value_to_reroll))
                 }
             },
             _ => {
@@ -155,7 +155,9 @@ impl RollRequest {
 #[cfg(test)]
 mod tests {
     use crate::actions::Action;
-    use crate::dice::{ConstDice, DiceKind, FudgeDice, NumberedDice, NumericDice, TextDice};
+    use crate::dice::{
+        ConstDice, DiceKind, FudgeDice, FudgeRoll, NumberedDice, NumericDice, TextDice,
+    };
     use crate::DiceRequest;
 
     #[test]
@@ -175,7 +177,7 @@ mod tests {
 
     #[test]
     fn request_reroll_text() {
-        test_action_implemented_for_types(Action::RerollText(' '), false, true);
+        test_action_implemented_for_types(Action::RerollFudge(FudgeRoll::Blank), false, true);
     }
 
     #[test]
