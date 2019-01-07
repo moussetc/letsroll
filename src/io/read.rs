@@ -1,3 +1,4 @@
+use crate::actions::Action;
 use crate::dice::*;
 use crate::errors::Error;
 use crate::{DiceRequest, RollRequest};
@@ -13,15 +14,21 @@ impl FromStr for RollRequest {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(RollRequest::new(parse_request(s)?))
+        let (dice, actions) = parse_request(s)?;
+        let mut req = RollRequest::new(dice);
+        for action in actions.into_iter() {
+            req.add_step(action)?;
+        }
+        Ok(req)
     }
 }
 
-fn parse_request(s: &str) -> Result<Vec<DiceRequest>, Error> {
+fn parse_request(s: &str) -> Result<(Vec<DiceRequest>, Vec<Action>), Error> {
     match RequestParser::parse(Rule::roll_request, s) {
         Err(err) => Err(Error::from(err)),
         Ok(mut parsed_roll_request) => {
             let mut request_dice: Vec<DiceRequest> = vec![];
+            let mut actions: Vec<Action> = vec![];
             for dice_or_action in parsed_roll_request.next().unwrap().into_inner() {
                 match dice_or_action.as_rule() {
                     Rule::dice => {
@@ -89,11 +96,22 @@ fn parse_request(s: &str) -> Result<Vec<DiceRequest>, Error> {
                             }
                         }
                     }
+                    Rule::action => {
+                        for action in dice_or_action.into_inner() {
+                            match action.as_rule() {
+                                // TODO "Sum" after the dice is "total sum" which has to be implemented
+                                Rule::action_sum => actions.push(Action::Sum),
+                                Rule::action_flip => actions.push(Action::FlipFlop),
+                                // TODO : add other actions
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
                     Rule::EOI => (),
                     _ => unreachable!(),
                 }
             }
-            Ok(request_dice)
+            Ok((request_dice, actions))
         }
     }
 }
@@ -107,7 +125,7 @@ mod tests {
     #[test]
     fn read_numbered_dice() {
         assert_eq!(
-            parse_request(&String::from("5d6")).unwrap()[0],
+            parse_request(&String::from("5d6")).unwrap().0[0],
             DiceRequest::new(
                 DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(6))),
                 5
@@ -115,7 +133,7 @@ mod tests {
         );
 
         assert_eq!(
-            parse_request(&String::from("8D3")).unwrap()[0],
+            parse_request(&String::from("8D3")).unwrap().0[0],
             DiceRequest::new(
                 DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(3))),
                 8
@@ -123,7 +141,7 @@ mod tests {
         );
 
         assert_eq!(
-            parse_request(&String::from("D20")).unwrap()[0],
+            parse_request(&String::from("D20")).unwrap().0[0],
             DiceRequest::new(
                 DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(20))),
                 1
@@ -134,12 +152,12 @@ mod tests {
     #[test]
     fn read_fudge_dice() {
         assert_eq!(
-            parse_request(&String::from("F")).unwrap()[0],
+            parse_request(&String::from("F")).unwrap().0[0],
             DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 1)
         );
 
         assert_eq!(
-            parse_request(&String::from("8F")).unwrap()[0],
+            parse_request(&String::from("8F")).unwrap().0[0],
             DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 8)
         );
     }
@@ -147,7 +165,7 @@ mod tests {
     #[test]
     fn read_const_dice() {
         assert_eq!(
-            parse_request(&String::from("+5")).unwrap()[0],
+            parse_request(&String::from("+5")).unwrap().0[0],
             DiceRequest::new(
                 DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(5))),
                 1
@@ -155,13 +173,15 @@ mod tests {
         );
 
         assert_eq!(
-            parse_request(&String::from("+100")).unwrap()[0],
+            parse_request(&String::from("+100")).unwrap().0[0],
             DiceRequest::new(
                 DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(100))),
                 1
             )
         );
     }
+
+    // TODO add test for global actions + dice actions
 
     #[test]
     fn read_ko() {

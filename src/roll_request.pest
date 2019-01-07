@@ -7,4 +7,9 @@ fudge_dice = ${ dice_number? ~ ^"F" }
 num_const_dice = ${ "+" ~ dice_sides }
 dice = { numbered_dice | fudge_dice | num_const_dice }
 
-roll_request = { SOI ~ dice+ ~ EOI }
+// Actions definition
+action_sum = @{ ^"Sum" }
+action_flip = @{ ^"Flip" }
+action = ${ action_sum | action_flip }
+
+roll_request = { SOI ~ dice+ ~ action* ~ EOI }
