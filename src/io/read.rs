@@ -45,6 +45,23 @@ fn parse_request(s: &str) -> Result<Vec<DiceRequest>, Error> {
                                         dice_number,
                                     ));
                                 }
+                                Rule::num_const_dice => {
+                                    let const_value: NumericRoll;
+                                    let rule = dice.into_inner().next().unwrap();
+                                    match rule.as_rule() {
+                                        Rule::dice_sides => {
+                                            const_value =
+                                                rule.as_str().parse::<NumericRoll>().unwrap();
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                    request_dice.push(DiceRequest::new(
+                                        DiceKind::NumericKind(NumericDice::ConstDice(
+                                            ConstDice::new(const_value),
+                                        )),
+                                        1,
+                                    ));
+                                }
                                 Rule::numbered_dice => {
                                     let mut dice_number: DiceNumber = 1;
                                     let mut dice_sides: NumericRoll = 1;
@@ -124,6 +141,25 @@ mod tests {
         assert_eq!(
             parse_request(&String::from("8F")).unwrap()[0],
             DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 8)
+        );
+    }
+
+    #[test]
+    fn read_const_dice() {
+        assert_eq!(
+            parse_request(&String::from("+5")).unwrap()[0],
+            DiceRequest::new(
+                DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(5))),
+                1
+            )
+        );
+
+        assert_eq!(
+            parse_request(&String::from("+100")).unwrap()[0],
+            DiceRequest::new(
+                DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(100))),
+                1
+            )
         );
     }
 
