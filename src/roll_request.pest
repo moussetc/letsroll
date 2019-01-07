@@ -1,8 +1,9 @@
 WHITESPACE = _{ " " }
 dice_number = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 dice_sides = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
-numbered_dice = { dice_number? ~ ^"D" ~ dice_sides }
-fudge_dice = { dice_number? ~ ^"F" }
+numbered_dice = ${ dice_number? ~ ^"D" ~ dice_sides }
+fudge_dice = ${ dice_number? ~ ^"F" }
 dice = { numbered_dice | fudge_dice }
+
 
 roll_request = { SOI ~ dice+ ~ EOI }
