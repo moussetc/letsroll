@@ -3,6 +3,12 @@ use crate::errors::{Error, ErrorKind};
 use crate::{DiceRequest, RollRequest};
 use std::str::FromStr;
 
+use pest::Parser;
+
+#[derive(Parser)]
+#[grammar = "roll_request.pest"]
+pub struct RequestParser;
+
 impl FromStr for DiceRequest {
     type Err = Error;
     // Parse a string to find a dice definition (number of dice + dice type + optional dice parameters)
@@ -69,13 +75,75 @@ impl FromStr for RollRequest {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<DiceRequest> = s
-            .trim()
-            .split(' ')
-            .map(|part| DiceRequest::from_str(part))
-            .collect::<Result<Vec<DiceRequest>, Error>>()?;
-
-        Ok(RollRequest::new(parts))
+        match RequestParser::parse(Rule::roll_request, s) {
+            Err(err) => Err(Error::from(err)),
+            Ok(mut parsed_roll_request) => {
+                let mut request_dice: Vec<DiceRequest> = vec![];
+                for dice_or_action in parsed_roll_request.next().unwrap().into_inner() {
+                    match dice_or_action.as_rule() {
+                        Rule::dice => {
+                            for dice in dice_or_action.into_inner() {
+                                match dice.as_rule() {
+                                    Rule::fudge_dice => {
+                                        let mut inner_rules = dice.into_inner();
+                                        let mut dice_number: DiceNumber = 1;
+                                        match inner_rules.next() {
+                                            Some(rule) => match rule.as_rule() {
+                                                Rule::dice_number => {
+                                                    dice_number = rule
+                                                        .as_str()
+                                                        .parse::<DiceNumber>()
+                                                        .unwrap();
+                                                }
+                                                _ => unreachable!(),
+                                            },
+                                            None => (),
+                                        }
+                                        request_dice.push(DiceRequest::new(
+                                            DiceKind::TextKind(TextDice::FudgeDice(
+                                                FudgeDice::new(),
+                                            )),
+                                            dice_number,
+                                        ));
+                                    }
+                                    Rule::numbered_dice => {
+                                        let mut dice_number: DiceNumber = 1;
+                                        let mut dice_sides: NumericRoll = 1;
+                                        for rule in dice.into_inner() {
+                                            match rule.as_rule() {
+                                                Rule::dice_number => {
+                                                    dice_number = rule
+                                                        .as_str()
+                                                        .parse::<DiceNumber>()
+                                                        .unwrap();
+                                                }
+                                                Rule::dice_sides => {
+                                                    dice_sides = rule
+                                                        .as_str()
+                                                        .parse::<NumericRoll>()
+                                                        .unwrap();
+                                                }
+                                                _ => unreachable!(),
+                                            }
+                                        }
+                                        request_dice.push(DiceRequest::new(
+                                            DiceKind::NumericKind(NumericDice::NumberedDice(
+                                                NumberedDice::new(dice_sides),
+                                            )),
+                                            dice_number,
+                                        ));
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                        Rule::EOI => (),
+                        _ => unreachable!(),
+                    }
+                }
+                Ok(RollRequest::new(request_dice))
+            }
+        }
     }
 }
 

@@ -3,6 +3,10 @@ pub mod dice;
 pub mod errors;
 pub mod io;
 
+extern crate pest;
+#[macro_use]
+extern crate pest_derive;
+
 pub use crate::actions::Action;
 use crate::actions::*;
 use crate::dice::*;

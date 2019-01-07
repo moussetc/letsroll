@@ -1,6 +1,8 @@
 use std::error;
 use std::fmt;
 
+use pest;
+
 /// An error that can occur in this crate.
 ///
 /// Generally, this error corresponds to problems parsing the input, or
@@ -51,6 +53,12 @@ impl From<std::num::ParseIntError> for Error {
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
         Error::file(error)
+    }
+}
+
+impl<R: pest::RuleType> From<pest::error::Error<R>> for Error {
+    fn from(error: pest::error::Error<R>) -> Self {
+        Error::parse(error)
     }
 }
 
