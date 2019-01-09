@@ -17,6 +17,12 @@ impl Display for FudgeRoll {
     }
 }
 
+impl Display for AggregatedRoll {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 impl fmt::Display for Rolls {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -33,6 +39,7 @@ impl fmt::Display for Rolls {
                     .map(|roll| roll.to_string())
                     .collect::<Vec<String>>()
                     .join(" "),
+                Rolls::Aggregation(agregation) => agregation.to_string(),
             }
         )
     }
@@ -108,6 +115,7 @@ impl fmt::Display for DiceKind {
             match self {
                 DiceKind::NumericKind(num_dice) => num_dice.to_string(),
                 DiceKind::TextKind(text_dice) => text_dice.to_string(),
+                DiceKind::Aggregate(aggregation_dice) => aggregation_dice.description.to_string(),
             }
         )
     }
@@ -115,7 +123,11 @@ impl fmt::Display for DiceKind {
 
 impl fmt::Display for DiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.number, self.kind,)
+        match self.kind {
+            // Don't write "number of dice" for aggregate because it is meaningless
+            DiceKind::Aggregate(ref aggregate) => write!(f, "{}", &aggregate.description),
+            _ => write!(f, "{}{}", self.number, self.kind,),
+        }
     }
 }
 
@@ -124,9 +136,14 @@ impl fmt::Display for RollRequest {
         write!(
             f,
             "{}",
-            self.results()
+            self.dice_rolls
                 .iter()
-                .map(|keyval| format!("{}\t: {}", keyval.0, keyval.1))
+                .enumerate()
+                .map(|(dice_index, rolls)| format!(
+                    "{}\t: {}",
+                    self.dice_requests.get(dice_index).expect("argh"),
+                    rolls
+                ))
                 .collect::<Vec<String>>()
                 .join("\n"),
         )

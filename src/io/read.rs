@@ -102,6 +102,7 @@ fn parse_request(s: &str) -> Result<(Vec<DiceRequest>, Vec<Action>), Error> {
                                 // TODO "Sum" after the dice is "total sum" which has to be implemented
                                 Rule::action_sum => actions.push(Action::Sum),
                                 Rule::action_flip => actions.push(Action::FlipFlop),
+                                Rule::action_total => actions.push(Action::Total),
                                 // TODO : add other actions
                                 _ => unreachable!(),
                             }

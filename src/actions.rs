@@ -4,9 +4,15 @@
 //! Some actions are only defined for a kind of roll (for example, you can
 //! sum numeric rolls but not fudge rolls).
 
+use crate::dice::AggregatedDice;
+use crate::dice::AggregatedRoll;
+use crate::dice::DiceKind;
 use crate::dice::DiceNumber;
 use crate::dice::GetMaxValue;
+use crate::dice::Rolls;
 use crate::dice::{FudgeRoll, NumericRoll, Roll};
+use crate::errors::{Error, ErrorKind};
+use crate::DiceRequest;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
@@ -23,8 +29,10 @@ pub enum Action {
     RerollNumeric(NumericRoll),
     /// Rerolls the dice for the values equal to the action parameter (fudge rolls only, cf. trait [Reroll](trait.Reroll.html)).
     RerollFudge(FudgeRoll),
-    /// Sum the rolls (numeric rolls only, cf. trait [Sum](trait.Sum.html)).
+    /// Sum the rolls for each dice (numeric rolls only, cf. trait [Sum](trait.Sum.html)).
     Sum,
+    // Sum all the dice (numeric rolls only, cf. trait [TotalSum](trait.TotalSum.html)).
+    Total,
     /// Multiply the rolls by the action parameter (numeric rolls only, cf. trait [MultiplyBy](trait.MultiplyBy.html)).
     MultiplyBy(NumericRoll),
     /// Invert the digits of the rolls (numeric rolls only, cf. trait [FlipFlop](trait.FlipFlop.html)).   
@@ -153,7 +161,7 @@ fn get_digits_number(n: f32) -> usize {
 /// ```
 ///
 /// # Remark
-/// This kind of action is only applied to the results rolls of once dice. To get the total sum of all dice, see [TotalSum](struct.TotalSum.html)
+/// This kind of action is only applied to the results rolls of once dice. To get the total sum of all dice, see [TotalSum](traits.TotalSum.html)
 pub trait Sum<T> {
     fn sum(&self) -> T;
 }
@@ -197,26 +205,59 @@ impl<T: PartialEq + Copy + Debug, V: Roll<RollResult = Vec<T>>> Explode<T, V> fo
     }
 }
 
-// pub trait Aggregate {
-//     fn aggregate(rolls: &Vec<Rolls>) -> Option<Rolls>;
-// }
-// /// Return a single sum of all rolls, regardless of dice kind
-// ///
-// /// To get the sums of each kind of dice separately, use [Sum](struct.Sum.html)
-// pub struct TotalSum;
-// impl Aggregate for TotalSum {
-//     fn aggregate(rolls: &Vec<Rolls>) -> Option<Rolls> {
-//         // TODO change kind of dice to DiceKind::Aggregate?
-//         if rolls.len() == 0 {
-//             return None;
-//         }
-//         let result = rolls.iter().map(|roll| roll.result).sum();
-//         Some(Rolls {
-//             dice: rolls[0].dice,
-//             result: result,
-//         })
-//     }
-// }
+/// Return a single sum of all rolls, regardless of dice kind
+///
+/// To get the sums of each kind of dice separately, use [Sum](trait.Sum.html)
+pub trait TotalSum {
+    fn total(&self, dice: &Vec<DiceRequest>) -> Result<Rolls, Error>;
+}
+impl TotalSum for Vec<Rolls> {
+    fn total(&self, dice: &Vec<DiceRequest>) -> Result<Rolls, Error> {
+        if self.len() == 0 {
+            return Ok(Rolls::Aggregation(AggregatedRoll {
+                value: String::from("No dice to total :("),
+            }));
+        }
+
+        let num_rolls: Result<Vec<Vec<NumericRoll>>, Error> = self
+            .iter()
+            .map(|typed_rolls| match typed_rolls {
+                Rolls::NumericRolls(num_rolls) => Ok(num_rolls.clone()),
+                _ => Err(Error::new(ErrorKind::IncompatibleAction(String::from(
+                    "Impossible to compute a sum for non numerical rolls.",
+                )))),
+            })
+            .collect();
+
+        match num_rolls {
+            Ok(rolls_to_sum) => {
+                let subresults: Vec<(NumericRoll, String)> = rolls_to_sum
+                    .iter()
+                    .enumerate()
+                    .map(|(index, rolls)| {
+                        (
+                            rolls.iter().sum(),
+                            dice.get(index).expect("argh").to_string(),
+                        )
+                    })
+                    .collect();
+                let result: NumericRoll = rolls_to_sum.iter().flatten().sum();
+                Ok(Rolls::Aggregation(AggregatedRoll {
+                    value: format!(
+                        "{}\nDetail: {}",
+                        result,
+                        subresults
+                            .iter()
+                            .map(|d| format!("{}: {}", d.1, d.0))
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    ),
+                }))
+            }
+            Err(err) => Err(err),
+        }
+    }
+}
 
 /// TODO ???
 pub trait CountValues<T> {

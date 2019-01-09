@@ -10,6 +10,7 @@ dice = { numbered_dice | fudge_dice | num_const_dice }
 // Actions definition
 action_sum = @{ ^"Sum" }
 action_flip = @{ ^"Flip" }
-action = ${ action_sum | action_flip }
+action_total = @{ ^"Total" }
+action = ${ action_sum | action_flip | action_total }
 
 roll_request = { SOI ~ dice+ ~ action* ~ EOI }

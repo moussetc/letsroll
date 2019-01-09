@@ -18,6 +18,13 @@ pub enum FudgeRoll {
     Blank,
 }
 
+/// Value resulting of an aggregating action such as the TotalSum.
+/// An agregation cannot be modified by an action.
+#[derive(Debug)]
+pub struct AggregatedRoll {
+    pub value: String,
+}
+
 /// Trait to represent dice that can be rolled to produce values using the [sum](trait.Roll.html#tymethod.roll) method.
 pub trait Roll {
     type RollResult;
@@ -34,6 +41,7 @@ pub trait GetMaxValue: Roll {
 pub enum DiceKind {
     NumericKind(NumericDice),
     TextKind(TextDice),
+    Aggregate(AggregatedDice),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -84,9 +92,11 @@ impl Roll for TextDice {
     }
 }
 
+#[derive(Debug)]
 pub enum Rolls {
     NumericRolls(Vec<NumericRoll>),
     FudgeRolls(Vec<FudgeRoll>),
+    Aggregation(AggregatedRoll),
 }
 /// Dice that always return the same value
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -238,6 +248,11 @@ impl Hash for FudgeDice {
         // TODO : ugly but all FudgeDice are one and the same...
         1.hash(state);
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct AggregatedDice {
+    pub description: String,
 }
 
 #[cfg(test)]

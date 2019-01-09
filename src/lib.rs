@@ -11,7 +11,6 @@ pub use crate::actions::Action;
 use crate::actions::*;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
-use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct DiceRequest {
@@ -25,34 +24,53 @@ impl DiceRequest {
 }
 
 pub struct RollRequest {
-    rolls: HashMap<DiceRequest, Rolls>,
+    // rolls: HashMap<DiceRequest, Rolls>,
+    pub dice_requests: Vec<DiceRequest>,
+    pub dice_rolls: Vec<Rolls>,
 }
 
 impl RollRequest {
     pub fn new(dice_requests: Vec<DiceRequest>) -> RollRequest {
-        let mut request = RollRequest {
-            rolls: HashMap::new(),
-        };
-        let requests = dice_requests;
-        {
-            for mut dice in requests.into_iter() {
-                // Initial rolls
-                let rolls = match dice.kind {
-                    DiceKind::NumericKind(ref mut num_dice) => {
-                        Rolls::NumericRolls(num_dice.roll(dice.number))
-                    }
-                    DiceKind::TextKind(ref mut text_dice) => {
-                        Rolls::FudgeRolls(text_dice.roll(dice.number))
-                    }
-                };
-                request.rolls.insert(dice, rolls);
-            }
+        // Initial rolls
+        let dice_rolls: Vec<Rolls> = dice_requests
+            .iter()
+            .map(|dice| match dice.kind {
+                DiceKind::NumericKind(ref num_dice) => {
+                    Rolls::NumericRolls(num_dice.roll(dice.number))
+                }
+                DiceKind::TextKind(ref text_dice) => Rolls::FudgeRolls(text_dice.roll(dice.number)),
+                _ => unimplemented!(),
+            })
+            .collect();
+        RollRequest {
+            dice_requests,
+            dice_rolls,
         }
-        request
     }
 
     pub fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
-        for (dice, rolls) in self.rolls.iter_mut() {
+        // Handle actions that affect all dice first
+        match &action {
+            Action::Total => {
+                // Compute total
+                let total = self.dice_rolls.total(&self.dice_requests)?;
+                let dice = DiceKind::Aggregate(AggregatedDice {
+                    description: String::from("TOTAL"),
+                });
+                self.dice_requests.clear();
+                self.dice_requests.push(DiceRequest::new(dice, 1));
+                self.dice_rolls.clear();
+                self.dice_rolls.push(total);
+                return Ok(());
+            }
+            _ => (),
+        }
+        //TODO instead of using indexes to know what dice to use for reroll, define a "dice ID" (later: will be a string, useable by users!)
+        for (dice_index, rolls) in self.dice_rolls.iter_mut().enumerate() {
+            let dice = self
+                .dice_requests
+                .get(dice_index)
+                .expect("not supposed to happen! did an agregate screw everything up?");
             *rolls = match rolls {
                 Rolls::NumericRolls(num_rolls) => match &dice.kind {
                     DiceKind::NumericKind(num_dice) => {
@@ -82,6 +100,8 @@ impl RollRequest {
                         ));
                     }
                 },
+                Rolls::Aggregation(_) => return Err(Error::new(ErrorKind::IncompatibleAction(
+                    String::from("No action can be applied to an aggregated value (eg. the result of a total sum)"))))
             };
         }
         Ok(())
@@ -149,10 +169,6 @@ impl RollRequest {
                 ))))
             }
         }))
-    }
-
-    pub fn results(&self) -> &HashMap<DiceRequest, Rolls> {
-        &self.rolls
     }
 }
 
@@ -236,7 +252,7 @@ mod tests {
 
         let mut request = crate::RollRequest::new(dice_requests);
         assert_eq!(Ok(()), request.add_step(action));
-        let output = request.results();
+        let output = request.dice_rolls;
 
         assert_eq!(output.len(), dice_requests_len);
     }
