@@ -18,25 +18,31 @@ pub struct RollSession<T, V: Clone> {
 }
 
 impl RollSession<NumericRoll, NumericDice> {
-    pub fn new(dice: Vec<DiceRequest<NumericDice>>) -> RollSession<NumericRoll, NumericDice> {
+    pub fn new(
+        dice_requests: Vec<DiceRequest<NumericDice>>,
+    ) -> RollSession<NumericRoll, NumericDice> {
+        let dice = Dice::new();
         RollSession {
-            dice: Dice::new(),
-            rolls: dice
+            rolls: dice_requests
                 .into_iter()
-                .map(|dice_request| RollResults::<NumericRoll, NumericDice>::new(dice_request))
+                .map(|dice_request| {
+                    RollResults::<NumericRoll, NumericDice>::new(dice_request, &dice)
+                })
                 .collect(),
+            dice,
         }
     }
 }
 
 impl RollSession<FudgeRoll, FudgeDice> {
-    pub fn new(dice: Vec<DiceRequest<FudgeDice>>) -> RollSession<FudgeRoll, FudgeDice> {
+    pub fn new(dice_requests: Vec<DiceRequest<FudgeDice>>) -> RollSession<FudgeRoll, FudgeDice> {
+        let dice = Dice::new();
         RollSession {
-            dice: Dice::new(),
-            rolls: dice
+            rolls: dice_requests
                 .into_iter()
-                .map(|dice_request| RollResults::<FudgeRoll, FudgeDice>::new(dice_request))
+                .map(|dice_request| RollResults::<FudgeRoll, FudgeDice>::new(dice_request, &dice))
                 .collect(),
+            dice,
         }
     }
 }

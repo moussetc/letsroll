@@ -50,6 +50,15 @@ impl MultiplyBy<Vec<NumericRoll>> for Vec<NumericRoll> {
         self.iter().map(|roll| roll * factor).collect()
     }
 }
+impl MultiplyBy<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, NumericDice> {
+    fn multiply(&self, factor: NumericRoll) -> RollResults<NumericRoll, NumericDice> {
+        RollResults {
+            description: format!("({}) x {}", &self.description, factor),
+            dice_request: self.dice_request.clone(),
+            rolls: self.rolls.multiply(factor),
+        }
+    }
+}
 
 /// Replace the rolls equal to the given value by a new roll
 /// # Example
@@ -71,14 +80,14 @@ impl Reroll<NumericRoll, RollResults<NumericRoll, NumericDice>>
         let mut new_rolls: Vec<NumericRoll> = vec![];
         for roll in self.rolls.iter() {
             if roll == t {
-                new_rolls.append(&mut dice.roll_numeric_dice(1, &self.dice.dice));
+                new_rolls.append(&mut dice.roll_numeric_dice(1, &self.dice_request.dice));
             } else {
                 new_rolls.push(roll.clone());
             }
         }
         RollResults {
             description: format!("{} Reroll({})", self.description, t),
-            dice: self.dice.clone(),
+            dice_request: self.dice_request.clone(),
             rolls: new_rolls,
         }
     }
@@ -109,13 +118,14 @@ impl FlipFlop<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll
     fn flip(&self) -> RollResults<NumericRoll, NumericDice> {
         RollResults {
             description: format!("flip({})", &self.description),
-            dice: self.dice.clone(),
+            dice_request: self.dice_request.clone(),
             rolls: self
                 .rolls
                 .iter()
                 .map(|roll| {
                     // Compute the max padding required for 1 to become 10, 100, etc. according to the dice sides
-                    let max_digits = get_digits_number(self.dice.dice.get_max_value() as f32);
+                    let max_digits =
+                        get_digits_number(self.dice_request.dice.get_max_value() as f32);
                     let result = format!("{:0width$}", roll, width = max_digits)
                         .chars()
                         .rev()
@@ -148,6 +158,15 @@ pub trait Sum<T> {
 impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
     fn sum(&self) -> Vec<NumericRoll> {
         vec![self.iter().sum()]
+    }
+}
+impl Sum<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, NumericDice> {
+    fn sum(&self) -> RollResults<NumericRoll, NumericDice> {
+        RollResults {
+            description: format!("sum({})", &self.description),
+            dice_request: self.dice_request.clone(),
+            rolls: self.rolls.sum(),
+        }
     }
 }
 
@@ -220,7 +239,7 @@ impl TotalSum for Vec<RollResults<NumericRoll, NumericDice>> {
         };
 
         RollResults {
-            dice: DiceRequest::new(1, NumericDice::ConstDice(sum)),
+            dice_request: DiceRequest::new(1, NumericDice::ConstDice(sum)),
             description,
             rolls: vec![sum],
         }
@@ -243,10 +262,10 @@ impl<T: Hash + Eq> CountValues<Vec<NumericRoll>> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    // use crate::actions::*;
+    use crate::actions::*;
     // use crate::dice::{ConstDice, NumberedDice, NumericRoll, RepeatingDice};
 
-    // static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
+    static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
 
     // #[test]
     // fn transform_count_values() {
@@ -254,17 +273,22 @@ mod tests {
     //     // :( It's useless to return sums without the associated value! Argh.
     // }
 
-    // #[test]
-    // fn transform_multiply() {
-    //     let input = NUM_INPUT.to_vec();
-    //     let factor: NumericRoll = 5;
-    //     let output = input.multiply(factor);
-    //     let expected = &input;
-    //     assert_eq!(output.len(), expected.len());
-    //     for i in 0..expected.len() - 1 {
-    //         assert_eq!(output[i], expected[i] * factor);
-    //     }
-    // }
+    #[test]
+    fn transform_multiply() {
+        let input = NUM_INPUT.to_vec();
+        let factor: NumericRoll = 5;
+        let expected = &input.clone();
+        let rolls_result = RollResults::<NumericRoll, NumericDice>::new(
+            DiceRequest::new(5, NumericDice::RepeatingDice(input)),
+            &Dice::new(),
+        );
+        let output = rolls_result.multiply(factor);
+        assert_eq!(output.rolls.len(), expected.len());
+        //TODO assert description after action
+        for i in 0..expected.len() - 1 {
+            assert_eq!(output.rolls[i], expected[i] * factor);
+        }
+    }
 
     // #[test]
     // fn transform_flipflop() {

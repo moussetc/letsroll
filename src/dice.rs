@@ -54,7 +54,7 @@ impl Dice {
         }
     }
 
-    pub fn roll_numeric_dice(&self, n: NumericRoll, dice: &NumericDice) -> Vec<NumericRoll> {
+    pub fn roll_numeric_dice(&self, n: DiceNumber, dice: &NumericDice) -> Vec<NumericRoll> {
         match dice {
             NumericDice::ConstDice(const_value) => self.roll_const_dice(n, const_value),
             NumericDice::NumberedDice(sides) => self.roll_numbered_dice(n, sides),
@@ -64,7 +64,7 @@ impl Dice {
         }
     }
 
-    pub fn roll_repeating<T: Clone>(&self, n: NumericRoll, repeating_values: &Vec<T>) -> Vec<T> {
+    pub fn roll_repeating<T: Clone>(&self, n: DiceNumber, repeating_values: &Vec<T>) -> Vec<T> {
         let mut repeat_values = repeating_values.clone();
         for _ in 0..(n as usize / repeating_values.len()) {
             repeat_values.append(&mut repeating_values.clone());
@@ -72,16 +72,16 @@ impl Dice {
         repeat_values[0..(n as usize)].to_vec()
     }
 
-    pub fn roll_const_dice<T: Clone>(&self, n: NumericRoll, const_value: &T) -> Vec<T> {
+    pub fn roll_const_dice<T: Clone>(&self, n: DiceNumber, const_value: &T) -> Vec<T> {
         (1..n + 1).map(|_| const_value.clone()).collect()
     }
 
-    pub fn roll_numbered_dice(&self, n: NumericRoll, sides: &NumericRoll) -> Vec<NumericRoll> {
+    pub fn roll_numbered_dice(&self, n: DiceNumber, sides: &NumericRoll) -> Vec<NumericRoll> {
         let mut rng = self.rng_ref.borrow_mut();
         (1..n + 1).map(|_| rng.gen_range(1, sides + 1)).collect()
     }
 
-    pub fn roll_fudgey_dice(&self, n: NumericRoll, dice: &FudgeDice) -> Vec<FudgeRoll> {
+    pub fn roll_fudgey_dice(&self, n: DiceNumber, dice: &FudgeDice) -> Vec<FudgeRoll> {
         match dice {
             FudgeDice::ConstDice(const_value) => self.roll_const_dice(n, const_value),
             FudgeDice::FudgeDice => self.roll_fudge_dice(n),
@@ -89,7 +89,7 @@ impl Dice {
         }
     }
 
-    pub fn roll_fudge_dice(&self, n: NumericRoll) -> Vec<FudgeRoll> {
+    pub fn roll_fudge_dice(&self, n: DiceNumber) -> Vec<FudgeRoll> {
         let mut rng = self.rng_ref.borrow_mut();
         (1..n + 1)
             .map(|_| match rng.gen_range(1, 4) {
@@ -114,27 +114,33 @@ impl<T: Clone> DiceRequest<T> {
 }
 
 pub struct RollResults<T, V: Clone> {
-    pub(crate) dice: DiceRequest<V>,
+    pub(crate) dice_request: DiceRequest<V>,
     pub(crate) description: String,
     pub(crate) rolls: Vec<T>,
 }
 
 impl RollResults<NumericRoll, NumericDice> {
-    pub fn new(dice: DiceRequest<NumericDice>) -> RollResults<NumericRoll, NumericDice> {
+    pub fn new(
+        dice_request: DiceRequest<NumericDice>,
+        dice: &Dice,
+    ) -> RollResults<NumericRoll, NumericDice> {
         RollResults {
-            description: dice.to_string(),
-            dice,
-            rolls: vec![],
+            description: dice_request.to_string(),
+            rolls: dice.roll_numeric_dice(dice_request.number, &dice_request.dice),
+            dice_request,
         }
     }
 }
 
 impl RollResults<FudgeRoll, FudgeDice> {
-    pub fn new(dice: DiceRequest<FudgeDice>) -> RollResults<FudgeRoll, FudgeDice> {
+    pub fn new(
+        dice_request: DiceRequest<FudgeDice>,
+        dice: &Dice,
+    ) -> RollResults<FudgeRoll, FudgeDice> {
         RollResults {
-            description: dice.to_string(),
-            dice,
-            rolls: vec![],
+            description: dice_request.to_string(),
+            rolls: dice.roll_fudgey_dice(dice_request.number, &dice_request.dice),
+            dice_request,
         }
     }
 }
