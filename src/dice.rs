@@ -3,10 +3,6 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cell::RefCell;
 
-use crate::errors::Error;
-
-use crate::actions;
-
 pub type DiceNumber = u8;
 /// Type of roll result for numbered dice (like D20)
 pub type NumericRoll = u16;
@@ -104,30 +100,31 @@ impl Dice {
 }
 
 #[derive(Debug, Clone)]
-pub struct DiceRequest<T: Clone> {
+pub struct RollRequest<T: Clone> {
     pub(crate) number: DiceNumber,
     pub(crate) dice: T,
 }
+pub type NumericRollRequest = RollRequest<NumericDice>;
+pub type FudgeRollRequest = RollRequest<FudgeDice>;
 
-impl<T: Clone> DiceRequest<T> {
-    pub fn new(number: DiceNumber, dice: T) -> DiceRequest<T> {
-        DiceRequest { number, dice }
+impl<T: Clone> RollRequest<T> {
+    pub fn new(number: DiceNumber, dice: T) -> RollRequest<T> {
+        RollRequest { number, dice }
     }
 }
 
 #[derive(Debug)]
-pub struct RollResults<T: Debug, V: Debug + Clone> {
-    pub(crate) dice_request: DiceRequest<V>,
+pub struct Rolls<T: Debug, V: Debug + Clone> {
+    pub(crate) dice_request: RollRequest<V>,
     pub(crate) description: String,
     pub(crate) rolls: Vec<T>,
 }
 
-impl RollResults<NumericRoll, NumericDice> {
-    pub fn new(
-        dice_request: DiceRequest<NumericDice>,
-        dice: &Dice,
-    ) -> RollResults<NumericRoll, NumericDice> {
-        RollResults {
+pub type NumericRolls = Rolls<NumericRoll, NumericDice>;
+
+impl NumericRolls {
+    pub fn new(dice_request: NumericRollRequest, dice: &Dice) -> NumericRolls {
+        Rolls {
             description: dice_request.to_string(),
             rolls: dice.roll_numeric_dice(dice_request.number, &dice_request.dice),
             dice_request,
@@ -135,12 +132,11 @@ impl RollResults<NumericRoll, NumericDice> {
     }
 }
 
-impl RollResults<FudgeRoll, FudgeDice> {
-    pub fn new(
-        dice_request: DiceRequest<FudgeDice>,
-        dice: &Dice,
-    ) -> RollResults<FudgeRoll, FudgeDice> {
-        RollResults {
+pub type FudgeRolls = Rolls<FudgeRoll, FudgeDice>;
+
+impl FudgeRolls {
+    pub fn new(dice_request: FudgeRollRequest, dice: &Dice) -> FudgeRolls {
+        Rolls {
             description: dice_request.to_string(),
             rolls: dice.roll_fudgey_dice(dice_request.number, &dice_request.dice),
             dice_request,

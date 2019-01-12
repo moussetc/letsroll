@@ -4,6 +4,7 @@
 //! Some actions are only defined for a kind of roll (for example, you can
 //! sum numeric rolls but not fudge rolls).
 
+use crate::dice::NumericRolls;
 use crate::dice::*;
 use std::collections::HashMap;
 use std::fmt;
@@ -50,9 +51,9 @@ impl MultiplyBy<Vec<NumericRoll>> for Vec<NumericRoll> {
         self.iter().map(|roll| roll * factor).collect()
     }
 }
-impl MultiplyBy<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, NumericDice> {
-    fn multiply(&self, factor: NumericRoll) -> RollResults<NumericRoll, NumericDice> {
-        RollResults {
+impl MultiplyBy<NumericRolls> for NumericRolls {
+    fn multiply(&self, factor: NumericRoll) -> NumericRolls {
+        Rolls {
             description: format!("({}) x {}", &self.description, factor),
             dice_request: self.dice_request.clone(),
             rolls: self.rolls.multiply(factor),
@@ -73,10 +74,8 @@ impl MultiplyBy<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRo
 pub trait Reroll<T, V> {
     fn reroll(&self, dice: &Dice, t: &T) -> V;
 }
-impl Reroll<NumericRoll, RollResults<NumericRoll, NumericDice>>
-    for RollResults<NumericRoll, NumericDice>
-{
-    fn reroll(&self, dice: &Dice, t: &NumericRoll) -> RollResults<NumericRoll, NumericDice> {
+impl Reroll<NumericRoll, NumericRolls> for NumericRolls {
+    fn reroll(&self, dice: &Dice, t: &NumericRoll) -> NumericRolls {
         let mut new_rolls: Vec<NumericRoll> = vec![];
         for roll in self.rolls.iter() {
             if roll == t {
@@ -85,7 +84,7 @@ impl Reroll<NumericRoll, RollResults<NumericRoll, NumericDice>>
                 new_rolls.push(roll.clone());
             }
         }
-        RollResults {
+        Rolls {
             description: format!("{} Reroll({})", self.description, t),
             dice_request: self.dice_request.clone(),
             rolls: new_rolls,
@@ -114,9 +113,9 @@ impl Reroll<NumericRoll, RollResults<NumericRoll, NumericDice>>
 pub trait FlipFlop<T> {
     fn flip(&self) -> T;
 }
-impl FlipFlop<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, NumericDice> {
-    fn flip(&self) -> RollResults<NumericRoll, NumericDice> {
-        RollResults {
+impl FlipFlop<NumericRolls> for NumericRolls {
+    fn flip(&self) -> NumericRolls {
+        Rolls {
             description: format!("flip({})", &self.description),
             dice_request: self.dice_request.clone(),
             rolls: self
@@ -160,9 +159,9 @@ impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
         vec![self.iter().sum()]
     }
 }
-impl Sum<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, NumericDice> {
-    fn sum(&self) -> RollResults<NumericRoll, NumericDice> {
-        RollResults {
+impl Sum<NumericRolls> for NumericRolls {
+    fn sum(&self) -> NumericRolls {
+        Rolls {
             description: format!("sum({})", &self.description),
             dice_request: self.dice_request.clone(),
             rolls: self.rolls.sum(),
@@ -187,10 +186,10 @@ impl Sum<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, Num
 /// # Warning
 /// Don't use on a [ConstDice](../dice/struct.ConstDice.html) result with the same ConstDice for rerolls: it would end in stack overflow since the highest value=only value will always be rerolled
 // pub trait Explode<T, V> {
-//     fn explode(&self, dice: &Dice, explosion_value: &T) -> RollResults<T, V>;
+//     fn explode(&self, dice: &Dice, explosion_value: &T) -> Rolls<T, V>;
 // }
-// impl<T: PartialEq + Clone, V> Explode<T, V> for RollResults<T, V> {
-//     fn explode(&self, dice: &Dice, explosion_value: &T) -> RollResults<T, V> {
+// impl<T: PartialEq + Clone, V> Explode<T, V> for Rolls<T, V> {
+//     fn explode(&self, dice: &Dice, explosion_value: &T) -> Rolls<T, V> {
 //         let mut rolls: Vec<T> = vec![];
 //         if self.rolls.len() != 0 {
 //             let new_rolls: Vec<T> = dice.roll(
@@ -203,7 +202,7 @@ impl Sum<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, Num
 //             rolls = self.rolls.clone();
 //             rolls.append(&mut new_rolls.explode(dice, explosion_value));
 //         }
-//         RollResults {
+//         Rolls {
 //             description: format!("{} explode({})", self.description, &explosion_value),
 //             dice: self.dice,
 //             rolls: rolls,
@@ -215,16 +214,10 @@ impl Sum<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, Num
 ///
 /// To get the sums of each kind of dice separately, use [Sum](trait.Sum.html)
 pub trait TotalSum {
-    fn total(
-        &self,
-        rolls: &Vec<RollResults<NumericRoll, NumericDice>>,
-    ) -> RollResults<NumericRoll, NumericDice>;
+    fn total(&self, rolls: &Vec<NumericRolls>) -> NumericRolls;
 }
-impl TotalSum for Vec<RollResults<NumericRoll, NumericDice>> {
-    fn total(
-        &self,
-        rolls: &Vec<RollResults<NumericRoll, NumericDice>>,
-    ) -> RollResults<NumericRoll, NumericDice> {
+impl TotalSum for Vec<NumericRolls> {
+    fn total(&self, rolls: &Vec<NumericRolls>) -> NumericRolls {
         let description = format!(
             "total sum of {}",
             rolls
@@ -238,8 +231,8 @@ impl TotalSum for Vec<RollResults<NumericRoll, NumericDice>> {
             _ => rolls.iter().map(|roll| roll.rolls.clone()).flatten().sum(),
         };
 
-        RollResults {
-            dice_request: DiceRequest::new(1, NumericDice::ConstDice(sum)),
+        Rolls {
+            dice_request: RollRequest::new(1, NumericDice::ConstDice(sum)),
             description,
             rolls: vec![sum],
         }
@@ -278,8 +271,8 @@ mod tests {
         let input = NUM_INPUT.to_vec();
         let factor: NumericRoll = 5;
         let expected = &input.clone();
-        let rolls_result = RollResults::<NumericRoll, NumericDice>::new(
-            DiceRequest::new(5, NumericDice::RepeatingDice(input)),
+        let rolls_result = NumericRolls::new(
+            RollRequest::new(5, NumericDice::RepeatingDice(input)),
             &Dice::new(),
         );
         let output = rolls_result.multiply(factor);

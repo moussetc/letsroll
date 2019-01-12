@@ -14,35 +14,34 @@ use crate::errors::{Error, ErrorKind};
 use core::fmt::Debug;
 
 #[derive(Debug)]
-pub struct RollSession<T: Debug, V: Debug + Clone> {
-    rolls: Vec<RollResults<T, V>>,
+pub struct TypedRollSession<T: Debug, V: Debug + Clone> {
+    rolls: Vec<Rolls<T, V>>,
     dice: Dice,
 }
 
-impl RollSession<NumericRoll, NumericDice> {
-    pub fn new(
-        dice_requests: Vec<DiceRequest<NumericDice>>,
-    ) -> RollSession<NumericRoll, NumericDice> {
+pub type NumericSession = TypedRollSession<NumericRoll, NumericDice>;
+pub type FudgeSession = TypedRollSession<FudgeRoll, FudgeDice>;
+
+impl NumericSession {
+    pub fn new(dice_requests: Vec<NumericRollRequest>) -> NumericSession {
         let dice = Dice::new();
-        RollSession {
+        TypedRollSession {
             rolls: dice_requests
                 .into_iter()
-                .map(|dice_request| {
-                    RollResults::<NumericRoll, NumericDice>::new(dice_request, &dice)
-                })
+                .map(|dice_request| NumericRolls::new(dice_request, &dice))
                 .collect(),
             dice,
         }
     }
 }
 
-impl RollSession<FudgeRoll, FudgeDice> {
-    pub fn new(dice_requests: Vec<DiceRequest<FudgeDice>>) -> RollSession<FudgeRoll, FudgeDice> {
+impl FudgeSession {
+    pub fn new(dice_requests: Vec<FudgeRollRequest>) -> FudgeSession {
         let dice = Dice::new();
-        RollSession {
+        TypedRollSession {
             rolls: dice_requests
                 .into_iter()
-                .map(|dice_request| RollResults::<FudgeRoll, FudgeDice>::new(dice_request, &dice))
+                .map(|dice_request| FudgeRolls::new(dice_request, &dice))
                 .collect(),
             dice,
         }
@@ -54,7 +53,7 @@ pub trait Session: Debug {
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error>;
 }
 
-impl Session for RollSession<NumericRoll, NumericDice> {
+impl Session for NumericSession {
     fn get_results(&self) -> String {
         self.rolls.iter().map(|roll| roll.to_string()).collect()
     }
@@ -63,7 +62,7 @@ impl Session for RollSession<NumericRoll, NumericDice> {
     }
 }
 
-impl Session for RollSession<FudgeRoll, FudgeDice> {
+impl Session for FudgeSession {
     fn get_results(&self) -> String {
         self.rolls.iter().map(|roll| roll.to_string()).collect()
     }
@@ -108,7 +107,7 @@ impl Session for FullRollSession {
 //                 description: String::from("TOTAL"),
 //             });
 //             self.dice_requests.clear();
-//             self.dice_requests.push(DiceRequest::new(dice, 1));
+//             self.dice_requests.push(RollRequest::new(dice, 1));
 //             self.dice_rolls.clear();
 //             self.dice_rolls.push(total);
 //             return Ok(());
@@ -225,7 +224,7 @@ mod tests {
     // use crate::dice::{
     //     ConstDice, DiceKind, FudgeDice, FudgeRoll, NumberedDice, NumericDice, TextDice,
     // };
-    // use crate::DiceRequest;
+    // use crate::RollRequest;
 
     // #[test]
     // fn request_count_values() {
@@ -274,17 +273,17 @@ mod tests {
     //     // Should be implemented for all dice types
     //     let mut dice_requests = vec![];
     //     if test_num_types {
-    //         dice_requests.push(DiceRequest::new(
+    //         dice_requests.push(RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(dice_val))),
     //             dice_number,
     //         ));
-    //         dice_requests.push(DiceRequest::new(
+    //         dice_requests.push(RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(dice_val))),
     //             dice_number,
     //         ));
     //     }
     //     if test_text_types {
-    //         dice_requests.push(DiceRequest::new(
+    //         dice_requests.push(RollRequest::new(
     //             DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())),
     //             dice_number,
     //         ));

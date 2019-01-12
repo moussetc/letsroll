@@ -1,7 +1,7 @@
 use crate::actions::Action;
 use crate::dice::*;
 use crate::errors::Error;
-use crate::{FullRollSession, RollSession, Session};
+use crate::{FudgeSession, FullRollSession, NumericSession, Session, TypedRollSession};
 use std::str::FromStr;
 
 use pest::Parser;
@@ -14,8 +14,8 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
     match RequestParser::parse(Rule::roll_request, s) {
         Err(err) => Err(Error::from(err)),
         Ok(mut parsed_roll_request) => {
-            let mut num_request_dice: Vec<DiceRequest<NumericDice>> = vec![];
-            let mut fudge_request_dice: Vec<DiceRequest<FudgeDice>> = vec![];
+            let mut num_request_dice: Vec<NumericRollRequest> = vec![];
+            let mut fudge_request_dice: Vec<FudgeRollRequest> = vec![];
             let mut actions: Vec<Action> = vec![];
             for dice_or_action in parsed_roll_request.next().unwrap().into_inner() {
                 match dice_or_action.as_rule() {
@@ -36,7 +36,7 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
                                         None => (),
                                     }
                                     fudge_request_dice
-                                        .push(DiceRequest::new(dice_number, FudgeDice::FudgeDice));
+                                        .push(RollRequest::new(dice_number, FudgeDice::FudgeDice));
                                 }
                                 Rule::num_const_dice => {
                                     let const_value: NumericRoll;
@@ -48,7 +48,7 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
                                         }
                                         _ => unreachable!(),
                                     }
-                                    num_request_dice.push(DiceRequest::new(
+                                    num_request_dice.push(RollRequest::new(
                                         1,
                                         NumericDice::ConstDice(const_value),
                                     ));
@@ -69,7 +69,7 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
                                             _ => unreachable!(),
                                         }
                                     }
-                                    num_request_dice.push(DiceRequest::new(
+                                    num_request_dice.push(RollRequest::new(
                                         dice_number,
                                         NumericDice::NumberedDice(dice_sides),
                                     ));
@@ -97,14 +97,14 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
 
             let mut sessions: Vec<Box<dyn Session>> = vec![];
             if num_request_dice.len() > 0 {
-                let mut session = RollSession::<NumericRoll, NumericDice>::new(num_request_dice);
+                let mut session = NumericSession::new(num_request_dice);
                 for action in actions.iter() {
                     session.add_step(*action)?;
                 }
                 sessions.push(Box::new(session));
             }
             if fudge_request_dice.len() > 0 {
-                let mut session = RollSession::<FudgeRoll, FudgeDice>::new(fudge_request_dice);
+                let mut session = FudgeSession::new(fudge_request_dice);
                 for action in actions.iter() {
                     session.add_step(*action)?;
                 }
@@ -120,13 +120,13 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
 mod tests {
     // use crate::dice::*;
     // use crate::io::read::parse_request;
-    // use crate::DiceRequest;
+    // use crate::RollRequest;
 
     // #[test]
     // fn read_numbered_dice() {
     //     assert_eq!(
     //         parse_request(&String::from("5d6")).unwrap().0[0],
-    //         DiceRequest::new(
+    //         RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(6))),
     //             5
     //         )
@@ -134,7 +134,7 @@ mod tests {
 
     //     assert_eq!(
     //         parse_request(&String::from("8D3")).unwrap().0[0],
-    //         DiceRequest::new(
+    //         RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(3))),
     //             8
     //         )
@@ -142,7 +142,7 @@ mod tests {
 
     //     assert_eq!(
     //         parse_request(&String::from("D20")).unwrap().0[0],
-    //         DiceRequest::new(
+    //         RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(20))),
     //             1
     //         )
@@ -153,12 +153,12 @@ mod tests {
     // fn read_fudge_dice() {
     //     assert_eq!(
     //         parse_request(&String::from("F")).unwrap().0[0],
-    //         DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 1)
+    //         RollRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 1)
     //     );
 
     //     assert_eq!(
     //         parse_request(&String::from("8F")).unwrap().0[0],
-    //         DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 8)
+    //         RollRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 8)
     //     );
     // }
 
@@ -166,7 +166,7 @@ mod tests {
     // fn read_const_dice() {
     //     assert_eq!(
     //         parse_request(&String::from("+5")).unwrap().0[0],
-    //         DiceRequest::new(
+    //         RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(5))),
     //             1
     //         )
@@ -174,7 +174,7 @@ mod tests {
 
     //     assert_eq!(
     //         parse_request(&String::from("+100")).unwrap().0[0],
-    //         DiceRequest::new(
+    //         RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(100))),
     //             1
     //         )

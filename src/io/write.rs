@@ -56,13 +56,13 @@ impl fmt::Display for FudgeDice {
     }
 }
 
-impl<T: Display + Clone> fmt::Display for DiceRequest<T> {
+impl<T: Display + Clone> fmt::Display for RollRequest<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", self.number, self.dice.to_string())
     }
 }
 
-impl<T: Display + Debug, V: Clone + Debug> fmt::Display for RollResults<T, V> {
+impl<T: Display + Debug, V: Clone + Debug> fmt::Display for Rolls<T, V> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -121,12 +121,12 @@ mod tests {
     // #[test]
     // fn dice_request_to_string() {
     //     assert_eq!(
-    //         DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 5)
+    //         RollRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 5)
     //             .to_string(),
     //         "5F"
     //     );
     //     assert_eq!(
-    //         DiceRequest::new(
+    //         RollRequest::new(
     //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(6))),
     //             1
     //         )
