@@ -1,7 +1,8 @@
 use crate::actions::Action;
 use crate::dice::*;
+use crate::dice2::FullRollSession;
+use crate::dice2::{DiceRequest, FudgeDice, NumericDice, RollSession, Session};
 use crate::errors::Error;
-use crate::{DiceRequest, RollRequest};
 use std::str::FromStr;
 
 use pest::Parser;
@@ -10,24 +11,12 @@ use pest::Parser;
 #[grammar = "roll_request.pest"]
 pub struct RequestParser;
 
-impl FromStr for RollRequest {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (dice, actions) = parse_request(s)?;
-        let mut req = RollRequest::new(dice);
-        for action in actions.into_iter() {
-            req.add_step(action)?;
-        }
-        Ok(req)
-    }
-}
-
-fn parse_request(s: &str) -> Result<(Vec<DiceRequest>, Vec<Action>), Error> {
+pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
     match RequestParser::parse(Rule::roll_request, s) {
         Err(err) => Err(Error::from(err)),
         Ok(mut parsed_roll_request) => {
-            let mut request_dice: Vec<DiceRequest> = vec![];
+            let mut num_request_dice: Vec<DiceRequest<NumericDice>> = vec![];
+            let mut fudge_request_dice: Vec<DiceRequest<FudgeDice>> = vec![];
             let mut actions: Vec<Action> = vec![];
             for dice_or_action in parsed_roll_request.next().unwrap().into_inner() {
                 match dice_or_action.as_rule() {
@@ -47,10 +36,8 @@ fn parse_request(s: &str) -> Result<(Vec<DiceRequest>, Vec<Action>), Error> {
                                         },
                                         None => (),
                                     }
-                                    request_dice.push(DiceRequest::new(
-                                        DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())),
-                                        dice_number,
-                                    ));
+                                    fudge_request_dice
+                                        .push(DiceRequest::new(dice_number, FudgeDice::FudgeDice));
                                 }
                                 Rule::num_const_dice => {
                                     let const_value: NumericRoll;
@@ -62,11 +49,9 @@ fn parse_request(s: &str) -> Result<(Vec<DiceRequest>, Vec<Action>), Error> {
                                         }
                                         _ => unreachable!(),
                                     }
-                                    request_dice.push(DiceRequest::new(
-                                        DiceKind::NumericKind(NumericDice::ConstDice(
-                                            ConstDice::new(const_value),
-                                        )),
+                                    num_request_dice.push(DiceRequest::new(
                                         1,
+                                        NumericDice::ConstDice(const_value),
                                     ));
                                 }
                                 Rule::numbered_dice => {
@@ -85,11 +70,9 @@ fn parse_request(s: &str) -> Result<(Vec<DiceRequest>, Vec<Action>), Error> {
                                             _ => unreachable!(),
                                         }
                                     }
-                                    request_dice.push(DiceRequest::new(
-                                        DiceKind::NumericKind(NumericDice::NumberedDice(
-                                            NumberedDice::new(dice_sides),
-                                        )),
+                                    num_request_dice.push(DiceRequest::new(
                                         dice_number,
+                                        NumericDice::NumberedDice(dice_sides),
                                     ));
                                 }
                                 _ => unreachable!(),
@@ -112,89 +95,106 @@ fn parse_request(s: &str) -> Result<(Vec<DiceRequest>, Vec<Action>), Error> {
                     _ => unreachable!(),
                 }
             }
-            Ok((request_dice, actions))
+
+            let mut sessions: Vec<Box<dyn Session>> = vec![];
+            if num_request_dice.len() > 0 {
+                let mut session = RollSession::<NumericRoll, NumericDice>::new(num_request_dice);
+                for action in actions.iter() {
+                    session.add_step(*action)?;
+                }
+                sessions.push(Box::new(session));
+            }
+            if fudge_request_dice.len() > 0 {
+                let mut session = RollSession::<FudgeRoll, FudgeDice>::new(fudge_request_dice);
+                for action in actions.iter() {
+                    session.add_step(*action)?;
+                }
+                sessions.push(Box::new(session));
+            }
+
+            Ok(FullRollSession::new(sessions))
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::dice::*;
-    use crate::io::read::parse_request;
-    use crate::DiceRequest;
+    // use crate::dice::*;
+    // use crate::io::read::parse_request;
+    // use crate::DiceRequest;
 
-    #[test]
-    fn read_numbered_dice() {
-        assert_eq!(
-            parse_request(&String::from("5d6")).unwrap().0[0],
-            DiceRequest::new(
-                DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(6))),
-                5
-            )
-        );
+    // #[test]
+    // fn read_numbered_dice() {
+    //     assert_eq!(
+    //         parse_request(&String::from("5d6")).unwrap().0[0],
+    //         DiceRequest::new(
+    //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(6))),
+    //             5
+    //         )
+    //     );
 
-        assert_eq!(
-            parse_request(&String::from("8D3")).unwrap().0[0],
-            DiceRequest::new(
-                DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(3))),
-                8
-            )
-        );
+    //     assert_eq!(
+    //         parse_request(&String::from("8D3")).unwrap().0[0],
+    //         DiceRequest::new(
+    //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(3))),
+    //             8
+    //         )
+    //     );
 
-        assert_eq!(
-            parse_request(&String::from("D20")).unwrap().0[0],
-            DiceRequest::new(
-                DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(20))),
-                1
-            )
-        );
-    }
+    //     assert_eq!(
+    //         parse_request(&String::from("D20")).unwrap().0[0],
+    //         DiceRequest::new(
+    //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(20))),
+    //             1
+    //         )
+    //     );
+    // }
 
-    #[test]
-    fn read_fudge_dice() {
-        assert_eq!(
-            parse_request(&String::from("F")).unwrap().0[0],
-            DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 1)
-        );
+    // #[test]
+    // fn read_fudge_dice() {
+    //     assert_eq!(
+    //         parse_request(&String::from("F")).unwrap().0[0],
+    //         DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 1)
+    //     );
 
-        assert_eq!(
-            parse_request(&String::from("8F")).unwrap().0[0],
-            DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 8)
-        );
-    }
+    //     assert_eq!(
+    //         parse_request(&String::from("8F")).unwrap().0[0],
+    //         DiceRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 8)
+    //     );
+    // }
 
-    #[test]
-    fn read_const_dice() {
-        assert_eq!(
-            parse_request(&String::from("+5")).unwrap().0[0],
-            DiceRequest::new(
-                DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(5))),
-                1
-            )
-        );
+    // #[test]
+    // fn read_const_dice() {
+    //     assert_eq!(
+    //         parse_request(&String::from("+5")).unwrap().0[0],
+    //         DiceRequest::new(
+    //             DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(5))),
+    //             1
+    //         )
+    //     );
 
-        assert_eq!(
-            parse_request(&String::from("+100")).unwrap().0[0],
-            DiceRequest::new(
-                DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(100))),
-                1
-            )
-        );
-    }
+    //     assert_eq!(
+    //         parse_request(&String::from("+100")).unwrap().0[0],
+    //         DiceRequest::new(
+    //             DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(100))),
+    //             1
+    //         )
+    //     );
+    // }
 
-    // TODO add test for global actions + dice actions
+    // // TODO add test for global actions + dice actions
 
-    #[test]
-    fn read_ko() {
-        parse_request(&String::from("5")).unwrap_err();
-        parse_request(&String::from("Da")).unwrap_err();
-        parse_request(&String::from("D8D")).unwrap_err();
-        parse_request(&String::from("F8")).unwrap_err();
-        parse_request(&String::from("+")).unwrap_err();
-        parse_request(&String::from("8+")).unwrap_err();
-        parse_request(&String::from("+8+")).unwrap_err();
-        parse_request(&String::from("2+8")).unwrap_err();
-        parse_request(&String::from("5D 20")).unwrap_err();
-    }
+    // #[test]
+    // fn read_ko() {
+    //     parse_request(&String::from("5")).unwrap_err();
+    //     parse_request(&String::from("Da")).unwrap_err();
+    //     parse_request(&String::from("D8D")).unwrap_err();
+    //     parse_request(&String::from("F8")).unwrap_err();
+    //     parse_request(&String::from("+")).unwrap_err();
+    //     parse_request(&String::from("8+")).unwrap_err();
+    //     parse_request(&String::from("+8+")).unwrap_err();
+    //     parse_request(&String::from("2+8")).unwrap_err();
+    //     parse_request(&String::from("5D 20")).unwrap_err();
+    // }
 
 }

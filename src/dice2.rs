@@ -1,51 +1,36 @@
+use crate::actions;
+use crate::dice::DiceNumber;
 use crate::dice::FudgeRoll;
 use crate::dice::NumericRoll;
+use crate::errors::Error;
 use core::cell::RefCell;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use std::fmt;
-use std::fmt::Display;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum NumericDice {
     ConstDice(NumericRoll),
     NumberedDice(NumericRoll),
     RepeatingDice(Vec<NumericRoll>),
 }
 
-impl fmt::Display for NumericDice {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                NumericDice::ConstDice(const_value) => const_value.to_string(),
-                NumericDice::NumberedDice(sides) => format!("D{}", sides),
-                NumericDice::RepeatingDice(repeat_values) => format!("[TODO {:?}]", repeat_values),
+impl NumericDice {
+    pub fn get_max_value(&self) -> NumericRoll {
+        match self {
+            NumericDice::ConstDice(const_value) => *const_value,
+            NumericDice::NumberedDice(sides) => *sides,
+            NumericDice::RepeatingDice(repeating_values) => {
+                *repeating_values.iter().max().unwrap_or(&0)
             }
-        )
+        }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum FudgeDice {
     FudgeDice,
     ConstDice(FudgeRoll),
     RepeatingDice(Vec<FudgeRoll>),
-}
-
-impl fmt::Display for FudgeDice {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                FudgeDice::ConstDice(const_value) => const_value.to_string(),
-                FudgeDice::FudgeDice => String::from("F"),
-                FudgeDice::RepeatingDice(repeat_values) => format!("[TODO {:?}]", repeat_values),
-            }
-        )
-    }
 }
 
 pub struct Dice {
@@ -106,21 +91,22 @@ impl Dice {
     }
 }
 
-pub struct DiceRequest<T> {
-    number: NumericRoll,
-    dice: T,
+#[derive(Clone)]
+pub struct DiceRequest<T: Clone> {
+    pub(crate) number: DiceNumber,
+    pub(crate) dice: T,
 }
 
-impl<T: Display> fmt::Display for DiceRequest<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.number, self.dice.to_string())
+impl<T: Clone> DiceRequest<T> {
+    pub fn new(number: DiceNumber, dice: T) -> DiceRequest<T> {
+        DiceRequest { number, dice }
     }
 }
 
-pub struct RollResults<T, V> {
-    dice: DiceRequest<V>,
-    description: String,
-    rolls: Vec<T>,
+pub struct RollResults<T, V: Clone> {
+    pub(crate) dice: DiceRequest<V>,
+    pub(crate) description: String,
+    pub(crate) rolls: Vec<T>,
 }
 
 impl RollResults<NumericRoll, NumericDice> {
@@ -143,22 +129,7 @@ impl RollResults<FudgeRoll, FudgeDice> {
     }
 }
 
-impl<T: Display, V> fmt::Display for RollResults<T, V> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}: {}",
-            self.description,
-            self.rolls
-                .iter()
-                .map(|roll| roll.to_string())
-                .collect::<Vec<String>>()
-                .join(" ")
-        )
-    }
-}
-
-pub struct RollSession<T, V> {
+pub struct RollSession<T, V: Clone> {
     rolls: Vec<RollResults<T, V>>,
     dice: Dice,
 }
@@ -188,35 +159,49 @@ impl RollSession<FudgeRoll, FudgeDice> {
 }
 
 pub trait Session {
-    fn getResults(&self) -> String;
+    fn get_results(&self) -> String;
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error>;
 }
 
 impl Session for RollSession<NumericRoll, NumericDice> {
-    fn getResults(&self) -> String {
+    fn get_results(&self) -> String {
         self.rolls.iter().map(|roll| roll.to_string()).collect()
+    }
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+        unimplemented!();
     }
 }
 
 impl Session for RollSession<FudgeRoll, FudgeDice> {
-    fn getResults(&self) -> String {
+    fn get_results(&self) -> String {
         self.rolls.iter().map(|roll| roll.to_string()).collect()
+    }
+
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+        unimplemented!();
     }
 }
 
-pub fn parse(input: &String) -> Box<dyn Session> {
-    match input {
-        x if x == "D6" => Box::new(RollSession::<NumericRoll, NumericDice>::new(vec![
-            DiceRequest {
-                number: 3,
-                dice: NumericDice::ConstDice(42),
-            },
-        ])),
-        x if x == "F" => Box::new(RollSession::<FudgeRoll, FudgeDice>::new(vec![
-            DiceRequest {
-                number: 3,
-                dice: FudgeDice::ConstDice(FudgeRoll::Minus),
-            },
-        ])),
-        _ => panic!("argh"),
+pub struct FullRollSession {
+    subsessions: Vec<Box<dyn Session>>,
+}
+
+impl FullRollSession {
+    pub fn new(subsessions: Vec<Box<dyn Session>>) -> FullRollSession {
+        FullRollSession { subsessions }
+    }
+}
+
+impl Session for FullRollSession {
+    fn get_results(&self) -> String {
+        self.subsessions
+            .iter()
+            .map(|session| session.get_results())
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+        unimplemented!();
     }
 }

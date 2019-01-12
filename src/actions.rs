@@ -4,22 +4,14 @@
 //! Some actions are only defined for a kind of roll (for example, you can
 //! sum numeric rolls but not fudge rolls).
 
-use crate::dice::AggregatedDice;
-use crate::dice::AggregatedRoll;
-use crate::dice::DiceKind;
-use crate::dice::DiceNumber;
-use crate::dice::GetMaxValue;
-use crate::dice::Rolls;
-use crate::dice::{FudgeRoll, NumericRoll, Roll};
-use crate::errors::{Error, ErrorKind};
-use crate::DiceRequest;
+use crate::dice::{FudgeRoll, NumericRoll};
+use crate::dice2::*;
 use std::collections::HashMap;
 use std::fmt;
-use std::fmt::Debug;
 use std::hash::Hash;
 
 /// Enumeration of all possible actions
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Action {
     /// Clone the rolls (cf. trait [Identity](trait.Identity.html)).
     Identity,
@@ -93,20 +85,26 @@ impl MultiplyBy<Vec<NumericRoll>> for Vec<NumericRoll> {
 /// assert_eq!(input_rolls.reroll(&dice, &3), vec![1,2,42]);
 /// ```
 // TODO should the new roll be suject to the same action ?
-pub trait Reroll<T: PartialEq, V: Roll> {
-    fn reroll(&mut self, dice: &V, t: &T) -> Vec<T>;
+pub trait Reroll<T, V> {
+    fn reroll(&self, dice: &Dice, t: &T) -> V;
 }
-impl<T: PartialEq + Clone, V: Roll<RollResult = Vec<T>>> Reroll<T, V> for Vec<T> {
-    fn reroll(&mut self, dice: &V, t: &T) -> Vec<T> {
-        let mut new_rolls: Vec<T> = vec![];
-        for roll in self.iter() {
+impl Reroll<NumericRoll, RollResults<NumericRoll, NumericDice>>
+    for RollResults<NumericRoll, NumericDice>
+{
+    fn reroll(&self, dice: &Dice, t: &NumericRoll) -> RollResults<NumericRoll, NumericDice> {
+        let mut new_rolls: Vec<NumericRoll> = vec![];
+        for roll in self.rolls.iter() {
             if roll == t {
-                new_rolls.append(&mut dice.roll(1));
+                new_rolls.append(&mut dice.roll_numeric_dice(1, &self.dice.dice));
             } else {
                 new_rolls.push(roll.clone());
             }
         }
-        new_rolls
+        RollResults {
+            description: format!("{} Reroll({})", self.description, t),
+            dice: self.dice.clone(),
+            rolls: new_rolls,
+        }
     }
 }
 
@@ -128,23 +126,29 @@ impl<T: PartialEq + Clone, V: Roll<RollResult = Vec<T>>> Reroll<T, V> for Vec<T>
 /// let dice = ConstDice::new(100);
 /// assert_eq!(input_rolls.flip(&dice), vec![100,510,20]);
 /// ```
-pub trait FlipFlop<T, V: Roll> {
-    fn flip(&self, dice: &V) -> Vec<T>;
+pub trait FlipFlop<T> {
+    fn flip(&self) -> T;
 }
-impl<V: Roll + GetMaxValue> FlipFlop<NumericRoll, V> for Vec<NumericRoll> {
-    fn flip(&self, dice: &V) -> Vec<NumericRoll> {
-        self.iter()
-            .map(|roll| {
-                // Compute the max padding required for 1 to become 10, 100, etc. according to the dice sides
-                let max_digits = get_digits_number(dice.get_max_value() as f32);
-                let result = format!("{:0width$}", roll, width = max_digits)
-                    .chars()
-                    .rev()
-                    .collect::<String>();
-                let result: NumericRoll = result.parse().unwrap();
-                result
-            })
-            .collect()
+impl FlipFlop<RollResults<NumericRoll, NumericDice>> for RollResults<NumericRoll, NumericDice> {
+    fn flip(&self) -> RollResults<NumericRoll, NumericDice> {
+        RollResults {
+            description: format!("flip({})", &self.description),
+            dice: self.dice.clone(),
+            rolls: self
+                .rolls
+                .iter()
+                .map(|roll| {
+                    // Compute the max padding required for 1 to become 10, 100, etc. according to the dice sides
+                    let max_digits = get_digits_number(self.dice.dice.get_max_value() as f32);
+                    let result = format!("{:0width$}", roll, width = max_digits)
+                        .chars()
+                        .rev()
+                        .collect::<String>();
+                    let result: NumericRoll = result.parse().unwrap();
+                    result
+                })
+                .collect(),
+        }
     }
 }
 fn get_digits_number(n: f32) -> usize {
@@ -187,74 +191,62 @@ impl Sum<Vec<NumericRoll>> for Vec<NumericRoll> {
 /// ```
 /// # Warning
 /// Don't use on a [ConstDice](../dice/struct.ConstDice.html) result with the same ConstDice for rerolls: it would end in stack overflow since the highest value=only value will always be rerolled
-pub trait Explode<T, V: Roll> {
-    fn explode(&self, dice: &V, explosion_value: &T) -> Vec<T>;
-}
-impl<T: PartialEq + Copy + Debug, V: Roll<RollResult = Vec<T>>> Explode<T, V> for Vec<T> {
-    fn explode(&self, dice: &V, explosion_value: &T) -> Vec<T> {
-        if self.len() == 0 {
-            return vec![];
-        }
+// pub trait Explode<T, V> {
+//     fn explode(&self, dice: &Dice, explosion_value: &T) -> RollResults<T, V>;
+// }
+// impl<T: PartialEq + Clone, V> Explode<T, V> for RollResults<T, V> {
+//     fn explode(&self, dice: &Dice, explosion_value: &T) -> RollResults<T, V> {
+//         let mut rolls: Vec<T> = vec![];
+//         if self.rolls.len() != 0 {
+//             let new_rolls: Vec<T> = dice.roll(
+//                 self.rolls
+//                     .iter()
+//                     .filter(|roll| roll == explosion_value)
+//                     .count() as DiceNumber,
+//             );
 
-        let new_rolls: Vec<T> =
-            dice.roll(self.iter().filter(|roll| *roll == explosion_value).count() as DiceNumber);
-
-        let mut rolls = self.clone();
-        rolls.append(&mut new_rolls.explode(dice, explosion_value));
-        rolls
-    }
-}
+//             rolls = self.rolls.clone();
+//             rolls.append(&mut new_rolls.explode(dice, explosion_value));
+//         }
+//         RollResults {
+//             description: format!("{} explode({})", self.description, &explosion_value),
+//             dice: self.dice,
+//             rolls: rolls,
+//         }
+//     }
+// }
 
 /// Return a single sum of all rolls, regardless of dice kind
 ///
 /// To get the sums of each kind of dice separately, use [Sum](trait.Sum.html)
 pub trait TotalSum {
-    fn total(&self, dice: &Vec<DiceRequest>) -> Result<Rolls, Error>;
+    fn total(
+        &self,
+        rolls: &Vec<RollResults<NumericRoll, NumericDice>>,
+    ) -> RollResults<NumericRoll, NumericDice>;
 }
-impl TotalSum for Vec<Rolls> {
-    fn total(&self, dice: &Vec<DiceRequest>) -> Result<Rolls, Error> {
-        if self.len() == 0 {
-            return Ok(Rolls::Aggregation(AggregatedRoll {
-                value: String::from("No dice to total :("),
-            }));
-        }
+impl TotalSum for Vec<RollResults<NumericRoll, NumericDice>> {
+    fn total(
+        &self,
+        rolls: &Vec<RollResults<NumericRoll, NumericDice>>,
+    ) -> RollResults<NumericRoll, NumericDice> {
+        let description = format!(
+            "total sum of {}",
+            rolls
+                .iter()
+                .map(|roll| roll.description.clone())
+                .collect::<Vec<String>>()
+                .join(" ")
+        );
+        let mut sum: NumericRoll = match self.len() {
+            0 => 0,
+            _ => rolls.iter().map(|roll| roll.rolls.clone()).flatten().sum(),
+        };
 
-        let num_rolls: Result<Vec<Vec<NumericRoll>>, Error> = self
-            .iter()
-            .map(|typed_rolls| match typed_rolls {
-                Rolls::NumericRolls(num_rolls) => Ok(num_rolls.clone()),
-                _ => Err(Error::new(ErrorKind::IncompatibleAction(String::from(
-                    "Impossible to compute a sum for non numerical rolls.",
-                )))),
-            })
-            .collect();
-
-        match num_rolls {
-            Ok(rolls_to_sum) => {
-                let subresults: Vec<(NumericRoll, String)> = rolls_to_sum
-                    .iter()
-                    .enumerate()
-                    .map(|(index, rolls)| {
-                        (
-                            rolls.iter().sum(),
-                            dice.get(index).expect("argh").to_string(),
-                        )
-                    })
-                    .collect();
-                let result: NumericRoll = rolls_to_sum.iter().flatten().sum();
-                Ok(Rolls::Aggregation(AggregatedRoll {
-                    value: format!(
-                        "{}\nDetail: {}",
-                        result,
-                        subresults
-                            .iter()
-                            .map(|d| format!("{}: {}", d.1, d.0))
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    ),
-                }))
-            }
-            Err(err) => Err(err),
+        RollResults {
+            dice: DiceRequest::new(1, NumericDice::ConstDice(sum)),
+            description,
+            rolls: vec![sum],
         }
     }
 }
@@ -275,95 +267,95 @@ impl<T: Hash + Eq> CountValues<Vec<NumericRoll>> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::actions::*;
-    use crate::dice::{ConstDice, NumberedDice, NumericRoll, RepeatingDice};
+    // use crate::actions::*;
+    // use crate::dice::{ConstDice, NumberedDice, NumericRoll, RepeatingDice};
 
-    static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
+    // static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
 
-    #[test]
-    fn transform_identity() {
-        let input = NUM_INPUT.to_vec();
-        let output = input.clone_rolls();
-        let expected = &input;
-        assert_eq!(output.len(), expected.len());
-        for i in 0..expected.len() - 1 {
-            assert_eq!(output[i], expected[i]);
-        }
-    }
+    // #[test]
+    // fn transform_identity() {
+    //     let input = NUM_INPUT.to_vec();
+    //     let output = input.clone_rolls();
+    //     let expected = &input;
+    //     assert_eq!(output.len(), expected.len());
+    //     for i in 0..expected.len() - 1 {
+    //         assert_eq!(output[i], expected[i]);
+    //     }
+    // }
 
-    #[test]
-    fn transform_count_values() {
-        //TODO
-        // :( It's useless to return sums without the associated value! Argh.
-    }
+    // #[test]
+    // fn transform_count_values() {
+    //     //TODO
+    //     // :( It's useless to return sums without the associated value! Argh.
+    // }
 
-    #[test]
-    fn transform_multiply() {
-        let input = NUM_INPUT.to_vec();
-        let factor: NumericRoll = 5;
-        let output = input.multiply(factor);
-        let expected = &input;
-        assert_eq!(output.len(), expected.len());
-        for i in 0..expected.len() - 1 {
-            assert_eq!(output[i], expected[i] * factor);
-        }
-    }
+    // #[test]
+    // fn transform_multiply() {
+    //     let input = NUM_INPUT.to_vec();
+    //     let factor: NumericRoll = 5;
+    //     let output = input.multiply(factor);
+    //     let expected = &input;
+    //     assert_eq!(output.len(), expected.len());
+    //     for i in 0..expected.len() - 1 {
+    //         assert_eq!(output[i], expected[i] * factor);
+    //     }
+    // }
 
-    #[test]
-    fn transform_flipflop() {
-        let input = NUM_INPUT.to_vec();
-        let output = input.flip(&NumberedDice::new(100));
-        let expected = vec![100, 100, 100, 510, 2];
-        assert_eq!(output.len(), expected.len());
-        for i in 0..expected.len() - 1 {
-            assert_eq!(output[i], expected[i]);
-        }
-    }
+    // #[test]
+    // fn transform_flipflop() {
+    //     let input = NUM_INPUT.to_vec();
+    //     let output = input.flip(&NumberedDice::new(100));
+    //     let expected = vec![100, 100, 100, 510, 2];
+    //     assert_eq!(output.len(), expected.len());
+    //     for i in 0..expected.len() - 1 {
+    //         assert_eq!(output[i], expected[i]);
+    //     }
+    // }
 
-    #[test]
-    fn transform_sum() {
-        let input = NUM_INPUT.to_vec();
-        let output = input.sum();
-        let expected = vec![118];
-        assert_eq!(output.len(), expected.len());
-        for i in 0..expected.len() - 1 {
-            assert_eq!(output[i], expected[i]);
-        }
-    }
+    // #[test]
+    // fn transform_sum() {
+    //     let input = NUM_INPUT.to_vec();
+    //     let output = input.sum();
+    //     let expected = vec![118];
+    //     assert_eq!(output.len(), expected.len());
+    //     for i in 0..expected.len() - 1 {
+    //         assert_eq!(output[i], expected[i]);
+    //     }
+    // }
 
-    #[test]
-    fn transform_reroll_num() {
-        let mut input = NUM_INPUT.to_vec();
-        let output = input.reroll(&ConstDice::new(42), &1);
-        let expected = vec![42, 42, 42, 15, 100];
-        assert_eq!(output.len(), expected.len());
-        for i in 0..expected.len() - 1 {
-            assert_eq!(output[i], expected[i]);
-        }
-    }
+    // #[test]
+    // fn transform_reroll_num() {
+    //     let mut input = NUM_INPUT.to_vec();
+    //     let output = input.reroll(&ConstDice::new(42), &1);
+    //     let expected = vec![42, 42, 42, 15, 100];
+    //     assert_eq!(output.len(), expected.len());
+    //     for i in 0..expected.len() - 1 {
+    //         assert_eq!(output[i], expected[i]);
+    //     }
+    // }
 
-    #[test]
-    fn transform_reroll_text() {
-        let mut input = vec![' ', '+', '-', '+', '-'];
-        let output = input.reroll(&ConstDice::new(' '), &'-');
-        let expected = vec![' ', '+', ' ', '+', ' '];
-        assert_eq!(output.len(), expected.len());
-        for i in 0..expected.len() - 1 {
-            assert_eq!(output[i], expected[i]);
-        }
-    }
+    // #[test]
+    // fn transform_reroll_text() {
+    //     let mut input = vec![' ', '+', '-', '+', '-'];
+    //     let output = input.reroll(&ConstDice::new(' '), &'-');
+    //     let expected = vec![' ', '+', ' ', '+', ' '];
+    //     assert_eq!(output.len(), expected.len());
+    //     for i in 0..expected.len() - 1 {
+    //         assert_eq!(output[i], expected[i]);
+    //     }
+    // }
 
-    #[test]
-    fn transform_explode() {
-        let input = vec![1, 2, 3, 2, 1];
-        let dice = RepeatingDice::new(vec![1, 2]).unwrap();
-        let output = input.explode(&dice, &2);
-        let expected = vec![1, 2, 3, 2, 1, 1, 2, 1];
-        assert_eq!(output.len(), expected.len());
-        for i in 0..expected.len() - 1 {
-            assert_eq!(output[i], expected[i]);
-        }
-    }
+    // #[test]
+    // fn transform_explode() {
+    //     let input = vec![1, 2, 3, 2, 1];
+    //     let dice = RepeatingDice::new(vec![1, 2]).unwrap();
+    //     let output = input.explode(&dice, &2);
+    //     let expected = vec![1, 2, 3, 2, 1, 1, 2, 1];
+    //     assert_eq!(output.len(), expected.len());
+    //     for i in 0..expected.len() - 1 {
+    //         assert_eq!(output[i], expected[i]);
+    //     }
+    // }
 
     // #[test]
     // fn aggregate_total_sum() {
