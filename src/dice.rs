@@ -143,95 +143,72 @@ impl RollResults<FudgeRoll, FudgeDice> {
 mod tests {
     use crate::dice::*;
 
-    // #[test]
-    // fn dice_kind_comparison() {
-    //     assert_eq!(
-    //         NumericDice::ConstDice(ConstDice::new(10)),
-    //         NumericDice::ConstDice(ConstDice::new(10))
-    //     );
-    //     assert_ne!(
-    //         NumericDice::ConstDice(ConstDice::new(10)),
-    //         NumericDice::ConstDice(ConstDice::new(20))
-    //     );
-    //     assert_eq!(
-    //         NumericDice::NumberedDice(NumberedDice::new(10)),
-    //         NumericDice::NumberedDice(NumberedDice::new(10))
-    //     );
-    //     assert_ne!(
-    //         NumericDice::NumberedDice(NumberedDice::new(10)),
-    //         NumericDice::NumberedDice(NumberedDice::new(30))
-    //     );
-    //     assert_ne!(
-    //         NumericDice::NumberedDice(NumberedDice::new(10)),
-    //         NumericDice::ConstDice(ConstDice::new(10))
-    //     );
-    //     assert_eq!(FudgeDice::new(), FudgeDice::new());
-    //     assert_eq!(
-    //         DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
-    //         DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10)))
-    //     );
-    //     assert_ne!(
-    //         DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
-    //         DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(10)))
-    //     );
-    //     assert_ne!(
-    //         DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(10))),
-    //         DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new()))
-    //     );
-    // }
+    // TODO if test passes, that's because of how rust work so the test should be deleted!
+    #[test]
+    fn dice_kind_comparison() {
+        assert_eq!(NumericDice::ConstDice(10), NumericDice::ConstDice(10));
+        assert_ne!(NumericDice::ConstDice(10), NumericDice::ConstDice(20));
+        assert_eq!(NumericDice::NumberedDice(10), NumericDice::NumberedDice(10));
+        assert_ne!(NumericDice::NumberedDice(10), NumericDice::NumberedDice(30));
+        assert_ne!(NumericDice::NumberedDice(10), NumericDice::ConstDice(10));
+    }
 
-    // #[test]
-    // fn const_generation() {
-    //     let const_value = 42;
-    //     let roll_number = 5;
-    //     let gen = ConstDice::new(const_value);
-    //     let rolls = gen.roll(roll_number);
-    //     assert_eq!(rolls.len(), roll_number as usize);
-    //     for roll in rolls.iter() {
-    //         assert_eq!(*roll, const_value);
-    //     }
-    // }
+    #[test]
+    fn const_generation() {
+        let dice = Dice::new();
+        let const_value = 42;
+        let roll_number = 5;
+        let rolls = dice.roll_numeric_dice(roll_number, &NumericDice::ConstDice(const_value));
+        assert_eq!(rolls.len(), roll_number as usize);
+        for roll in rolls.iter() {
+            assert_eq!(*roll, const_value);
+        }
 
-    // #[test]
-    // fn numbered_dice_generation() {
-    //     let dice_sides = 42;
-    //     let roll_number = 5;
-    //     let gen = NumberedDice::new(dice_sides);
-    //     let rolls = gen.roll(roll_number);
-    //     assert_eq!(rolls.len(), roll_number as usize);
-    //     for roll in rolls.iter() {
-    //         assert!(*roll > 0, "Numbered dice generator rolls should be > 0");
-    //         assert!(
-    //             *roll <= dice_sides,
-    //             "Numbered dice generator rolls should be <= to the number of sides on the dice"
-    //         );
-    //     }
-    // }
+        let const_value = FudgeRoll::Blank;
+        let roll_number = 2;
+        let rolls = dice.roll_fudgey_dice(roll_number, &FudgeDice::ConstDice(const_value));
+        assert_eq!(rolls.len(), roll_number as usize);
+        for roll in rolls.iter() {
+            assert_eq!(*roll, const_value);
+        }
+    }
 
-    // #[test]
-    // fn repeating_dice() {
-    //     let dice = RepeatingDice::new(vec![1, 2, 3, 4, 5]);
-    //     match dice {
-    //         Err(_) => assert!(false),
-    //         Ok(dice) => {
-    //             assert_eq!(dice.roll(0), vec![]);
-    //             assert_eq!(dice.roll(3), vec![1, 2, 3]);
-    //             assert_eq!(dice.roll(5), vec![1, 2, 3, 4, 5]);
-    //             assert_eq!(
-    //                 dice.roll(15),
-    //                 vec![1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
-    //             );
-    //         }
-    //     }
-    // }
+    #[test]
+    fn numbered_dice_generation() {
+        let dice = Dice::new();
+        let dice_sides = 42;
+        let roll_number = 5;
+        let rolls = dice.roll_numeric_dice(roll_number, &NumericDice::NumberedDice(dice_sides));
+        assert_eq!(rolls.len(), roll_number as usize);
+        for roll in rolls.iter() {
+            assert!(*roll > 0, "Numbered dice generator rolls should be > 0");
+            assert!(
+                *roll <= dice_sides,
+                "Numbered dice generator rolls should be <= to the number of sides on the dice"
+            );
+        }
+    }
 
-    // #[test]
-    // fn repeating_dice_empty() {
-    //     let empty_value: Vec<NumericRoll> = vec![];
-    //     let dice = RepeatingDice::new(empty_value);
-    //     match dice {
-    //         Err(_) => assert!(true),
-    //         Ok(_) => assert!(false),
-    //     }
-    // }
+    #[test]
+    fn repeating_dice() {
+        let dice = Dice::new();
+        let repeating_values = vec![1, 2, 3, 4, 5];
+
+        assert_eq!(
+            dice.roll_numeric_dice(0, &NumericDice::RepeatingDice(repeating_values.clone())),
+            vec![]
+        );
+        assert_eq!(
+            dice.roll_numeric_dice(3, &NumericDice::RepeatingDice(repeating_values.clone())),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            dice.roll_numeric_dice(5, &NumericDice::RepeatingDice(repeating_values.clone())),
+            vec![1, 2, 3, 4, 5]
+        );
+        assert_eq!(
+            dice.roll_numeric_dice(15, &NumericDice::RepeatingDice(repeating_values.clone())),
+            vec![1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
+        );
+    }
 }
