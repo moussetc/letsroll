@@ -2,8 +2,8 @@
 extern crate serde_derive;
 extern crate docopt;
 use docopt::Docopt;
-use letsroll::dice2::FullRollSession;
-use letsroll::dice2::Session;
+use letsroll::dice::FullRollSession;
+use letsroll::dice::Session;
 use letsroll::errors::Error;
 
 use letsroll;
@@ -11,7 +11,6 @@ use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::str::FromStr;
 
 // Write the Docopt usage string.
 const USAGE: &'static str = "

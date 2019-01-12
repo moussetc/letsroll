@@ -1,7 +1,5 @@
 use crate::actions::Action;
 use crate::dice::*;
-use crate::dice2::FullRollSession;
-use crate::dice2::{DiceRequest, FudgeDice, NumericDice, RollSession, Session};
 use crate::errors::Error;
 use std::str::FromStr;
 

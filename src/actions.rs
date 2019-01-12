@@ -4,8 +4,7 @@
 //! Some actions are only defined for a kind of roll (for example, you can
 //! sum numeric rolls but not fudge rolls).
 
-use crate::dice::{FudgeRoll, NumericRoll};
-use crate::dice2::*;
+use crate::dice::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
@@ -238,7 +237,7 @@ impl TotalSum for Vec<RollResults<NumericRoll, NumericDice>> {
                 .collect::<Vec<String>>()
                 .join(" ")
         );
-        let mut sum: NumericRoll = match self.len() {
+        let sum: NumericRoll = match self.len() {
             0 => 0,
             _ => rolls.iter().map(|roll| roll.rolls.clone()).flatten().sum(),
         };

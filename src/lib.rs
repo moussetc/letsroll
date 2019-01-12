@@ -1,6 +1,5 @@
 pub mod actions;
 pub mod dice;
-pub mod dice2;
 pub mod errors;
 pub mod io;
 

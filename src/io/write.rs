@@ -1,5 +1,4 @@
-use crate::dice::FudgeRoll;
-use crate::dice2::*;
+use crate::dice::*;
 use std::fmt::{self, Display};
 
 impl Display for FudgeRoll {
