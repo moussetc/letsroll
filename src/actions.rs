@@ -12,8 +12,6 @@ use std::hash::Hash;
 /// Enumeration of all possible actions
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Action {
-    /// Clone the rolls (cf. trait [Identity](trait.Identity.html)).
-    Identity,
     /// TODO
     CountValues,
     /// Rerolls the dice for the values equal to the action parameter (numeric rolls only, cf. trait [Reroll](trait.Reroll.html)).
@@ -34,27 +32,6 @@ pub enum Action {
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-/// Action that return a clone of the rolls
-/// # Example
-/// ```
-/// # use letsroll::actions::Identity;
-/// let input_rolls = vec![1,2,3];
-/// assert_eq!(input_rolls.clone_rolls(), vec![1,2,3]);
-/// ```
-pub trait Identity<T> {
-    fn clone_rolls(&self) -> T;
-}
-impl Identity<Vec<NumericRoll>> for Vec<NumericRoll> {
-    fn clone_rolls(&self) -> Vec<NumericRoll> {
-        self.iter().map(|roll| roll.clone()).collect()
-    }
-}
-impl Identity<Vec<FudgeRoll>> for Vec<FudgeRoll> {
-    fn clone_rolls(&self) -> Vec<FudgeRoll> {
-        self.iter().map(|roll| roll.clone()).collect()
     }
 }
 
@@ -270,17 +247,6 @@ mod tests {
     // use crate::dice::{ConstDice, NumberedDice, NumericRoll, RepeatingDice};
 
     // static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
-
-    // #[test]
-    // fn transform_identity() {
-    //     let input = NUM_INPUT.to_vec();
-    //     let output = input.clone_rolls();
-    //     let expected = &input;
-    //     assert_eq!(output.len(), expected.len());
-    //     for i in 0..expected.len() - 1 {
-    //         assert_eq!(output[i], expected[i]);
-    //     }
-    // }
 
     // #[test]
     // fn transform_count_values() {
