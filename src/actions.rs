@@ -65,16 +65,18 @@ impl MultiplyBy<NumericRolls> for NumericRolls {
 /// # Example
 /// ```
 /// # use letsroll::actions::Reroll;
-/// # use letsroll::dice::ConstDice;
-/// let mut input_rolls = vec![1,2,3];
-/// let dice = ConstDice::new(42);
-/// assert_eq!(input_rolls.reroll(&dice, &3), vec![1,2,42]);
+/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// let input_rolls = vec![5,1,10];
+/// let dice = Dice::new();
+/// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
+/// let rolls = NumericRolls::new(dice_request, &dice);
+/// assert_eq!(rolls.reroll(&dice, &1).rolls, vec![5,5,10]);
 /// ```
-// TODO should the new roll be suject to the same action ?
 pub trait Reroll<T, V> {
     fn reroll(&self, dice: &Dice, t: &T) -> V;
 }
 impl Reroll<NumericRoll, NumericRolls> for NumericRolls {
+    // TODO should the new roll be suject to the same action ?
     fn reroll(&self, dice: &Dice, t: &NumericRoll) -> NumericRolls {
         let mut new_rolls: Vec<NumericRoll> = vec![];
         for roll in self.rolls.iter() {
@@ -97,18 +99,20 @@ impl Reroll<NumericRoll, NumericRolls> for NumericRolls {
 /// Let's simulate a D20 flipflop:
 /// ```
 /// # use letsroll::actions::FlipFlop;
-/// # use letsroll::dice::ConstDice;
-/// let mut input_rolls = vec![1,15,20];
-/// let dice = ConstDice::new(20);
-/// assert_eq!(input_rolls.flip(&dice), vec![10,51,2]);
+/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// let input_rolls = vec![1,15,20];
+/// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
+/// let rolls = NumericRolls::new(dice_request, &Dice::new());
+/// assert_eq!(rolls.flip().rolls, vec![10,51,2]);
 /// ```
 /// And now a D100 flipflop:
 /// ```
 /// # use letsroll::actions::FlipFlop;
-/// # use letsroll::dice::ConstDice;
-/// let mut input_rolls = vec![1,15,20];
-/// let dice = ConstDice::new(100);
-/// assert_eq!(input_rolls.flip(&dice), vec![100,510,20]);
+/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// let input_rolls = vec![1,15,100];
+/// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
+/// let rolls = NumericRolls::new(dice_request, &Dice::new());
+/// assert_eq!(rolls.flip().rolls, vec![100,510,1]);
 /// ```
 pub trait FlipFlop<T> {
     fn flip(&self) -> T;
@@ -145,10 +149,11 @@ fn get_digits_number(n: f32) -> usize {
 /// # Example
 /// ```
 /// # use letsroll::actions::Sum;
-/// let input_rolls = vec![1,2,3];
-/// assert_eq!(input_rolls.sum(), vec![6]);
+/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// let dice_request = NumericRollRequest::new(3, NumericDice::ConstDice(10));
+/// let rolls = NumericRolls::new(dice_request, &Dice::new());
+/// assert_eq!(rolls.sum().rolls, vec![30]);
 /// ```
-///
 /// # Remark
 /// This kind of action is only applied to the results rolls of once dice. To get the total sum of all dice, see [TotalSum](traits.TotalSum.html)
 pub trait Sum<T> {
@@ -169,21 +174,21 @@ impl Sum<NumericRolls> for NumericRolls {
     }
 }
 
-/// Explode rerolls the dice whenever the highest value is rolled.
-/// The new rolls can also trigger an explosion.
-///
-/// # Example
-/// ```
-/// # use letsroll::actions::Explode;
-/// # use letsroll::dice::ConstDice;
-/// let input_rolls = vec![1, 2, 3];
-/// let dice = ConstDice::new(4);
-/// assert_eq!(
-///     input_rolls.explode(&dice, &2),
-///     vec![1,2,3,4]
-/// );
-/// ```
-/// # Warning
+// /// Explode rerolls the dice whenever the highest value is rolled.
+// /// The new rolls can also trigger an explosion.
+// ///
+// /// # Example
+// /// ```
+// /// # use letsroll::actions::Explode;
+// /// # use letsroll::dice::ConstDice;
+// /// let input_rolls = vec![1, 2, 3];
+// /// let dice = ConstDice::new(4);
+// /// assert_eq!(
+// ///     input_rolls.explode(&dice, &2),
+// ///     vec![1,2,3,4]
+// /// );
+// /// ```
+// /// # Warning
 /// Don't use on a [ConstDice](../dice/struct.ConstDice.html) result with the same ConstDice for rerolls: it would end in stack overflow since the highest value=only value will always be rerolled
 // pub trait Explode<T, V> {
 //     fn explode(&self, dice: &Dice, explosion_value: &T) -> Rolls<T, V>;

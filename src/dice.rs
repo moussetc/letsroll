@@ -115,9 +115,9 @@ impl<T: Clone> RollRequest<T> {
 
 #[derive(Debug)]
 pub struct Rolls<T: Debug, V: Debug + Clone> {
-    pub(crate) dice_request: RollRequest<V>,
-    pub(crate) description: String,
-    pub(crate) rolls: Vec<T>,
+    pub dice_request: RollRequest<V>,
+    pub description: String,
+    pub rolls: Vec<T>,
 }
 
 pub type NumericRolls = Rolls<NumericRoll, NumericDice>;
