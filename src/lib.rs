@@ -12,6 +12,83 @@ use crate::actions::*;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
 
+pub struct RollSession<T, V: Clone> {
+    rolls: Vec<RollResults<T, V>>,
+    dice: Dice,
+}
+
+impl RollSession<NumericRoll, NumericDice> {
+    pub fn new(dice: Vec<DiceRequest<NumericDice>>) -> RollSession<NumericRoll, NumericDice> {
+        RollSession {
+            dice: Dice::new(),
+            rolls: dice
+                .into_iter()
+                .map(|dice_request| RollResults::<NumericRoll, NumericDice>::new(dice_request))
+                .collect(),
+        }
+    }
+}
+
+impl RollSession<FudgeRoll, FudgeDice> {
+    pub fn new(dice: Vec<DiceRequest<FudgeDice>>) -> RollSession<FudgeRoll, FudgeDice> {
+        RollSession {
+            dice: Dice::new(),
+            rolls: dice
+                .into_iter()
+                .map(|dice_request| RollResults::<FudgeRoll, FudgeDice>::new(dice_request))
+                .collect(),
+        }
+    }
+}
+
+pub trait Session {
+    fn get_results(&self) -> String;
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error>;
+}
+
+impl Session for RollSession<NumericRoll, NumericDice> {
+    fn get_results(&self) -> String {
+        self.rolls.iter().map(|roll| roll.to_string()).collect()
+    }
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+        unimplemented!();
+    }
+}
+
+impl Session for RollSession<FudgeRoll, FudgeDice> {
+    fn get_results(&self) -> String {
+        self.rolls.iter().map(|roll| roll.to_string()).collect()
+    }
+
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+        unimplemented!();
+    }
+}
+
+pub struct FullRollSession {
+    subsessions: Vec<Box<dyn Session>>,
+}
+
+impl FullRollSession {
+    pub fn new(subsessions: Vec<Box<dyn Session>>) -> FullRollSession {
+        FullRollSession { subsessions }
+    }
+}
+
+impl Session for FullRollSession {
+    fn get_results(&self) -> String {
+        self.subsessions
+            .iter()
+            .map(|session| session.get_results())
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+        unimplemented!();
+    }
+}
+
 // pub fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
 //     // Handle actions that affect all dice first
 //     match &action {

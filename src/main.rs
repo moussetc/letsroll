@@ -2,8 +2,8 @@
 extern crate serde_derive;
 extern crate docopt;
 use docopt::Docopt;
-use letsroll::dice::FullRollSession;
-use letsroll::dice::Session;
+use letsroll::{FullRollSession, Session};
+
 use letsroll::errors::Error;
 
 use letsroll;

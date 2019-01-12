@@ -1,4 +1,4 @@
-use letsroll::dice::Session;
+use letsroll::Session;
 
 fn main() {
     let parsed_request = String::from("5D8 4D2");

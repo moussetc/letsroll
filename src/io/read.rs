@@ -1,6 +1,7 @@
 use crate::actions::Action;
 use crate::dice::*;
 use crate::errors::Error;
+use crate::{FullRollSession, RollSession, Session};
 use std::str::FromStr;
 
 use pest::Parser;
