@@ -36,6 +36,8 @@ fn main() {
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
 
+    println!("{:?}", args);
+
     match run(args) {
         Ok(_) => (),
         Err(error) => {
@@ -54,7 +56,7 @@ fn run(args: Args) -> Result<(), Error> {
     };
 
     let session = letsroll::io::read::parse_request(&request_to_parse);
-
+    println!("{:?}", session);
     match session {
         Err(msg) => return Err(msg),
         Ok(ref req) => {

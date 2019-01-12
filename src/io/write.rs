@@ -1,4 +1,5 @@
 use crate::dice::*;
+use core::fmt::Debug;
 use std::fmt::{self, Display};
 
 impl Display for FudgeRoll {
@@ -61,7 +62,7 @@ impl<T: Display + Clone> fmt::Display for DiceRequest<T> {
     }
 }
 
-impl<T: Display, V: Clone> fmt::Display for RollResults<T, V> {
+impl<T: Display + Debug, V: Clone + Debug> fmt::Display for RollResults<T, V> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,

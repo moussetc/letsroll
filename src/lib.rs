@@ -11,8 +11,10 @@ pub use crate::actions::Action;
 use crate::actions::*;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
+use core::fmt::Debug;
 
-pub struct RollSession<T, V: Clone> {
+#[derive(Debug)]
+pub struct RollSession<T: Debug, V: Debug + Clone> {
     rolls: Vec<RollResults<T, V>>,
     dice: Dice,
 }
@@ -47,7 +49,7 @@ impl RollSession<FudgeRoll, FudgeDice> {
     }
 }
 
-pub trait Session {
+pub trait Session: Debug {
     fn get_results(&self) -> String;
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error>;
 }
@@ -71,6 +73,7 @@ impl Session for RollSession<FudgeRoll, FudgeDice> {
     }
 }
 
+#[derive(Debug)]
 pub struct FullRollSession {
     subsessions: Vec<Box<dyn Session>>,
 }

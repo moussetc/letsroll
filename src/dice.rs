@@ -1,3 +1,4 @@
+use core::fmt::Debug;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cell::RefCell;
@@ -43,6 +44,7 @@ pub enum FudgeDice {
     RepeatingDice(Vec<FudgeRoll>),
 }
 
+#[derive(Debug)]
 pub struct Dice {
     rng_ref: RefCell<ThreadRng>,
 }
@@ -101,7 +103,7 @@ impl Dice {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DiceRequest<T: Clone> {
     pub(crate) number: DiceNumber,
     pub(crate) dice: T,
@@ -113,7 +115,8 @@ impl<T: Clone> DiceRequest<T> {
     }
 }
 
-pub struct RollResults<T, V: Clone> {
+#[derive(Debug)]
+pub struct RollResults<T: Debug, V: Debug + Clone> {
     pub(crate) dice_request: DiceRequest<V>,
     pub(crate) description: String,
     pub(crate) rolls: Vec<T>,
