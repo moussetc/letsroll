@@ -10,7 +10,7 @@ extern crate pest_derive;
 pub use crate::actions::Action;
 use crate::actions::*;
 use crate::dice::*;
-use crate::errors::{Error, ErrorKind};
+use crate::errors::Error;
 use core::fmt::Debug;
 
 #[derive(Debug)]
@@ -55,7 +55,11 @@ pub trait Session: Debug {
 
 impl Session for NumericSession {
     fn get_results(&self) -> String {
-        self.rolls.iter().map(|roll| roll.to_string()).collect()
+        self.rolls
+            .iter()
+            .map(|roll| roll.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
     }
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
         match action {
@@ -99,7 +103,11 @@ impl Session for NumericSession {
 
 impl Session for FudgeSession {
     fn get_results(&self) -> String {
-        self.rolls.iter().map(|roll| roll.to_string()).collect()
+        self.rolls
+            .iter()
+            .map(|roll| roll.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
     }
 
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
@@ -132,30 +140,35 @@ impl Session for FudgeSession {
 }
 
 #[derive(Debug)]
-pub struct FullRollSession {
-    subsessions: Vec<Box<dyn Session>>,
+pub struct MultiTypeSession {
+    numeric_session: Option<NumericSession>,
+    fudge_session: Option<FudgeSession>,
 }
 
-impl FullRollSession {
-    pub fn new(subsessions: Vec<Box<dyn Session>>) -> FullRollSession {
-        FullRollSession { subsessions }
-    }
-}
-
-impl Session for FullRollSession {
+impl Session for MultiTypeSession {
     fn get_results(&self) -> String {
-        self.subsessions
-            .iter()
-            .map(|session| session.get_results())
-            .collect::<Vec<String>>()
-            .join("\n")
+        let mut subresults: Vec<String> = vec![];
+        match &self.numeric_session {
+            Some(session) => subresults.push(session.get_results()),
+            None => (),
+        };
+        match &self.fudge_session {
+            Some(session) => subresults.push(session.get_results()),
+            None => (),
+        };
+        subresults.join("\n")
     }
 
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
-        self.subsessions
-            .iter_mut()
-            .map(|session| session.add_step(action))
-            .collect()
+        match &mut self.numeric_session {
+            Some(ref mut session) => session.add_step(action)?,
+            None => (),
+        };
+        match &mut self.fudge_session {
+            Some(ref mut session) => session.add_step(action)?,
+            None => (),
+        };
+        Ok(())
     }
 }
 

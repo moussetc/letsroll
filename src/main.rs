@@ -2,7 +2,7 @@
 extern crate serde_derive;
 extern crate docopt;
 use docopt::Docopt;
-use letsroll::{FullRollSession, Session};
+use letsroll::Session;
 
 use letsroll::errors::Error;
 
@@ -55,9 +55,9 @@ fn run(args: Args) -> Result<(), Error> {
         None => args.arg_dice,
     };
 
-    let session = letsroll::io::read::parse_request(&request_to_parse);
-    println!("{:?}", session);
-    match session {
+    let roll_sessions = letsroll::io::read::parse_request(&request_to_parse);
+    println!("{:?}", roll_sessions);
+    match roll_sessions {
         Err(msg) => return Err(msg),
         Ok(ref req) => {
             println!("Rolling...\n{}", req.get_results());
@@ -75,7 +75,7 @@ fn run(args: Args) -> Result<(), Error> {
     }
 }
 
-fn write_results_to_file(filepath: &str, results: &FullRollSession) -> std::io::Result<()> {
+fn write_results_to_file(filepath: &str, results: &Session) -> std::io::Result<()> {
     let path = Path::new(filepath);
 
     let mut file = File::create(&path)?;

@@ -1,7 +1,8 @@
 use crate::actions::Action;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
-use crate::{FudgeSession, FullRollSession, NumericSession, Session, TypedRollSession};
+use crate::MultiTypeSession;
+use crate::{FudgeSession, NumericSession, Session};
 use std::str::FromStr;
 
 use pest::Parser;
@@ -25,7 +26,29 @@ impl FromStr for FudgeRoll {
     }
 }
 
-pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
+impl FromStr for NumericSession {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_request(s)?
+            .numeric_session
+            .ok_or(Error::new(ErrorKind::Parse(String::from(
+                "Could not parse numeric roll request",
+            ))))
+    }
+}
+
+impl FromStr for FudgeSession {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_request(s)?
+            .fudge_session
+            .ok_or(Error::new(ErrorKind::Parse(String::from(
+                "Could not parse fudge roll request",
+            ))))
+    }
+}
+
+pub fn parse_request(s: &str) -> Result<MultiTypeSession, Error> {
     match RequestParser::parse(Rule::roll_request, s) {
         Err(err) => Err(Error::from(err)),
         Ok(mut parsed_roll_request) => {
@@ -154,105 +177,104 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
                 }
             }
 
-            let mut sessions: Vec<Box<dyn Session>> = vec![];
+            let mut res = MultiTypeSession {
+                numeric_session: None,
+                fudge_session: None,
+            };
+
             if num_request_dice.len() > 0 {
                 let mut session = NumericSession::new(num_request_dice);
                 for action in actions.iter() {
                     session.add_step(*action)?;
                 }
-                sessions.push(Box::new(session));
+                res.numeric_session = Some(session);
             }
             if fudge_request_dice.len() > 0 {
                 let mut session = FudgeSession::new(fudge_request_dice);
                 for action in actions.iter() {
                     session.add_step(*action)?;
                 }
-                sessions.push(Box::new(session));
+                res.fudge_session = Some(session);
             }
 
-            Ok(FullRollSession::new(sessions))
+            Ok(res)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    // use crate::dice::*;
-    // use crate::io::read::parse_request;
-    // use crate::RollRequest;
+    use crate::dice::*;
+    use crate::io::read::parse_request;
+    use crate::FudgeSession;
+    use crate::NumericSession;
+    use std::str::FromStr;
 
-    // #[test]
-    // fn read_numbered_dice() {
-    //     assert_eq!(
-    //         parse_request(&String::from("5d6")).unwrap().0[0],
-    //         RollRequest::new(
-    //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(6))),
-    //             5
-    //         )
-    //     );
+    #[test]
+    fn read_numbered_dice() {
+        let dice_request = &NumericSession::from_str(&String::from("5d6"))
+            .unwrap()
+            .rolls[0]
+            .dice_request;
+        assert_eq!(dice_request.dice, NumericDice::NumberedDice(6));
+        assert_eq!(dice_request.number, 5);
 
-    //     assert_eq!(
-    //         parse_request(&String::from("8D3")).unwrap().0[0],
-    //         RollRequest::new(
-    //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(3))),
-    //             8
-    //         )
-    //     );
+        let dice_request = &NumericSession::from_str(&String::from("8D3"))
+            .unwrap()
+            .rolls[0]
+            .dice_request;
+        assert_eq!(dice_request.dice, NumericDice::NumberedDice(3));
+        assert_eq!(dice_request.number, 8);
 
-    //     assert_eq!(
-    //         parse_request(&String::from("D20")).unwrap().0[0],
-    //         RollRequest::new(
-    //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(20))),
-    //             1
-    //         )
-    //     );
-    // }
+        let dice_request = &NumericSession::from_str(&String::from("D20"))
+            .unwrap()
+            .rolls[0]
+            .dice_request;
+        assert_eq!(dice_request.dice, NumericDice::NumberedDice(20));
+        assert_eq!(dice_request.number, 1);
+    }
 
-    // #[test]
-    // fn read_fudge_dice() {
-    //     assert_eq!(
-    //         parse_request(&String::from("F")).unwrap().0[0],
-    //         RollRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 1)
-    //     );
+    #[test]
+    fn read_fudge_dice() {
+        let dice_request =
+            &FudgeSession::from_str(&String::from("F")).unwrap().rolls[0].dice_request;
+        assert_eq!(dice_request.dice, FudgeDice::FudgeDice);
+        assert_eq!(dice_request.number, 1);
 
-    //     assert_eq!(
-    //         parse_request(&String::from("8F")).unwrap().0[0],
-    //         RollRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 8)
-    //     );
-    // }
+        let dice_request =
+            &FudgeSession::from_str(&String::from("10F")).unwrap().rolls[0].dice_request;
+        assert_eq!(dice_request.dice, FudgeDice::FudgeDice);
+        assert_eq!(dice_request.number, 10);
+    }
 
-    // #[test]
-    // fn read_const_dice() {
-    //     assert_eq!(
-    //         parse_request(&String::from("+5")).unwrap().0[0],
-    //         RollRequest::new(
-    //             DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(5))),
-    //             1
-    //         )
-    //     );
+    #[test]
+    fn read_const_dice() {
+        let dice_request =
+            &NumericSession::from_str(&String::from("+5")).unwrap().rolls[0].dice_request;
+        assert_eq!(dice_request.dice, NumericDice::ConstDice(5));
+        assert_eq!(dice_request.number, 1);
 
-    //     assert_eq!(
-    //         parse_request(&String::from("+100")).unwrap().0[0],
-    //         RollRequest::new(
-    //             DiceKind::NumericKind(NumericDice::ConstDice(ConstDice::new(100))),
-    //             1
-    //         )
-    //     );
-    // }
+        let dice_request = &NumericSession::from_str(&String::from("+142"))
+            .unwrap()
+            .rolls[0]
+            .dice_request;
+        assert_eq!(dice_request.dice, NumericDice::ConstDice(142));
+        assert_eq!(dice_request.number, 1);
+    }
 
-    // // TODO add test for global actions + dice actions
+    // // TODO add test for global actions + dice actions + KO tests for incompatibility
 
-    // #[test]
-    // fn read_ko() {
-    //     parse_request(&String::from("5")).unwrap_err();
-    //     parse_request(&String::from("Da")).unwrap_err();
-    //     parse_request(&String::from("D8D")).unwrap_err();
-    //     parse_request(&String::from("F8")).unwrap_err();
-    //     parse_request(&String::from("+")).unwrap_err();
-    //     parse_request(&String::from("8+")).unwrap_err();
-    //     parse_request(&String::from("+8+")).unwrap_err();
-    //     parse_request(&String::from("2+8")).unwrap_err();
-    //     parse_request(&String::from("5D 20")).unwrap_err();
-    // }
+    #[test]
+    fn read_ko() {
+        parse_request(&String::from("5")).unwrap_err();
+        parse_request(&String::from("Da")).unwrap_err();
+        parse_request(&String::from("D8D")).unwrap_err();
+        parse_request(&String::from("F8")).unwrap_err();
+        parse_request(&String::from("+")).unwrap_err();
+        parse_request(&String::from("8+")).unwrap_err();
+        parse_request(&String::from("+8+")).unwrap_err();
+        parse_request(&String::from("2+8")).unwrap_err();
+        parse_request(&String::from("5D 20")).unwrap_err();
+    }
 
 }
