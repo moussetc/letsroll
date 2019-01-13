@@ -8,9 +8,6 @@ use letsroll::errors::Error;
 
 use letsroll;
 use std::fs;
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
 
 // Write the Docopt usage string.
 const USAGE: &'static str = "
@@ -60,9 +57,9 @@ fn run(args: Args) -> Result<(), Error> {
     match roll_sessions {
         Err(msg) => return Err(msg),
         Ok(ref req) => {
-            println!("Rolling...\n{}", req.get_results());
+            println!("Rolling...\n{}", req.to_string());
             match &args.arg_savepath {
-                Some(save_path) => match write_results_to_file(&save_path, req) {
+                Some(save_path) => match req.write_results_to_file(&save_path) {
                     Ok(_) => {
                         println!("Wrote results to file {}", save_path);
                         Ok(())
@@ -73,11 +70,4 @@ fn run(args: Args) -> Result<(), Error> {
             }
         }
     }
-}
-
-fn write_results_to_file(filepath: &str, results: &Session) -> std::io::Result<()> {
-    let path = Path::new(filepath);
-
-    let mut file = File::create(&path)?;
-    file.write_all(results.get_results().as_bytes())
 }

@@ -19,6 +19,7 @@ pub enum NumericDice {
     ConstDice(NumericRoll),
     NumberedDice(NumericRoll),
     RepeatingDice(Vec<NumericRoll>),
+    AggregationResult,
 }
 
 impl NumericDice {
@@ -29,6 +30,7 @@ impl NumericDice {
             NumericDice::RepeatingDice(repeating_values) => {
                 *repeating_values.iter().max().unwrap_or(&0)
             }
+            NumericDice::AggregationResult => unimplemented!(),
         }
     }
 }
@@ -57,6 +59,7 @@ impl Roll<NumericRoll, NumericDice> for Dice {
             NumericDice::RepeatingDice(repeating_values) => {
                 self.roll_repeating(n, repeating_values)
             }
+            NumericDice::AggregationResult => unimplemented!(),
         }
     }
 }

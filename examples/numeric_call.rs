@@ -1,4 +1,4 @@
-use letsroll::dice::{NumericDice, NumericRoll, RollRequest};
+use letsroll::dice::{NumericDice, RollRequest};
 use letsroll::{NumericSession, Session};
 
 fn main() {
@@ -8,5 +8,5 @@ fn main() {
     ];
 
     let request = NumericSession::new(dice_request);
-    println!("{}", request.get_results());
+    println!("{}", request.to_string());
 }

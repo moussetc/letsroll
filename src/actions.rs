@@ -6,6 +6,8 @@
 
 use crate::dice::NumericRolls;
 use crate::dice::*;
+use crate::NumericSession;
+use crate::TypedRollSession;
 use core::fmt::Debug;
 use core::fmt::Display;
 use std::collections::HashMap;
@@ -15,8 +17,6 @@ use std::hash::Hash;
 /// Enumeration of all possible actions
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Action {
-    /// TODO
-    CountValues,
     /// Rerolls the dice for the values equal to the action parameter (numeric rolls only, cf. trait [Reroll](trait.Reroll.html)).
     RerollNumeric(NumericRoll),
     /// Rerolls the dice for the values equal to the action parameter (fudge rolls only, cf. trait [Reroll](trait.Reroll.html)).
@@ -40,40 +40,17 @@ impl fmt::Display for Action {
     }
 }
 
-pub trait Actionable {
-    fn is_allowed(action: &Action) -> bool;
+/// Enumeration of all possible aggregation.
+///
+/// An aggregation is an final action: you can't apply any other action afterward.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Aggregation {
+    /// Count occurences of the different result values (cf. trait [CountValues](trait.CountValues.html)).)
+    CountValues,
 }
-
-impl Actionable for NumericRolls {
-    fn is_allowed(action: &Action) -> bool {
-        match action {
-            Action::RerollNumeric(_)
-            | Action::Sum
-            | Action::MultiplyBy(_)
-            | Action::FlipFlop
-            | Action::Explode(_)
-            | Action::CountValues => true,
-            _ => false,
-        }
-    }
-}
-
-impl Actionable for FudgeRolls {
-    fn is_allowed(action: &Action) -> bool {
-        match action {
-            Action::RerollFudge(_) | Action::Explode(_) | Action::CountValues => true,
-            _ => false,
-        }
-    }
-}
-
-impl Actionable for Vec<NumericRolls> {
-    fn is_allowed(action: &Action) -> bool {
-        match action {
-            Action::Total => true,
-            a if NumericRolls::is_allowed(a) => true,
-            _ => false,
-        }
+impl fmt::Display for Aggregation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
@@ -290,30 +267,51 @@ impl TotalSum for Vec<NumericRolls> {
         };
 
         Rolls {
-            dice_request: RollRequest::new(1, NumericDice::ConstDice(sum)),
+            dice_request: RollRequest::new(1, NumericDice::AggregationResult),
             description,
             rolls: vec![sum],
         }
     }
 }
 
-/// TODO ???
-pub trait CountValues<T> {
-    fn count(&self) -> T;
+/// CountValues will count the occurences of each present value.
+///
+/// For example, if given the following rolls:
+/// -,+, -,0,+,+,0,-,-
+/// the returned counts will be:
+/// COUNT(+): 3, COUNT(0): 2, COUNT(-): 4
+pub trait CountValues {
+    fn count(&self) -> NumericSession;
 }
-impl<T: Hash + Eq> CountValues<Vec<NumericRoll>> for Vec<T> {
-    fn count(&self) -> Vec<NumericRoll> {
+
+impl<T: Debug + Eq + Hash + Display, V: Debug + Clone> CountValues for TypedRollSession<T, V> {
+    fn count(&self) -> NumericSession {
         let mut set: HashMap<&T, NumericRoll> = HashMap::new();
-        for roll in self.iter() {
-            set.entry(roll).and_modify(|count| *count += 1).or_insert(0);
+        let all_rolls = self.rolls.iter().map(|rolls| &rolls.rolls).flatten();
+        for roll in all_rolls {
+            set.entry(&roll)
+                .and_modify(|count| *count += 1)
+                .or_insert(1);
         }
-        set.iter().map(|keyval| *keyval.1).collect()
+        let rolls = set
+            .iter()
+            .map(|keyval| Rolls {
+                description: format!("COUNT({})", &keyval.0),
+                rolls: vec![*keyval.1],
+                dice_request: RollRequest::new(1, NumericDice::AggregationResult),
+            })
+            .collect();
+        NumericSession {
+            dice: Dice::new(),
+            rolls: rolls,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::actions::*;
+    use std::str::FromStr;
 
     static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
 
@@ -393,30 +391,51 @@ mod tests {
         assert_eq!(output.rolls, expected);
     }
 
-    // #[test]
-    // fn transform_count_values() {
-    //     //TODO
-    //     // :( It's useless to return sums without the associated value! Argh.
-    // }
+    #[test]
+    fn transform_total_sum() {
+        let dice = Dice::new();
+        let rolls: Vec<NumericRolls> = (1..=5)
+            .map(|i| {
+                let dice_request =
+                    NumericRollRequest::new(1 as DiceNumber, NumericDice::ConstDice(i));
+                NumericRolls::new(dice_request, &dice)
+            })
+            .collect();
+        let expected = NumericRolls {
+            description: String::from(""),
+            dice_request: RollRequest::new(1, NumericDice::AggregationResult),
+            rolls: vec![15],
+        };
+        let output = rolls.total();
 
-    // #[test]
-    // fn aggregate_total_sum() {
-    //     let input = NUM_INPUT.to_vec();
-    //     let output = actions::TotalSum::aggregate(&input);
-    //     let expected = Rolls::new(DiceKind::NumberedDice(10), 118);
+        assert_eq!(output.dice_request.dice, expected.dice_request.dice);
+        assert_eq!(output.dice_request.number, expected.dice_request.number);
+        assert_eq!(output.rolls[0], expected.rolls[0]);
+    }
 
-    //     match output {
-    //         None => assert!(false, "Sum agregation should return a sum roll"),
-    //         Some(output) => {
-    //             assert_eq!(
-    //                 output.dice, expected.dice,
-    //                 "Sum should return the same rolls dice"
-    //             );
-    //             assert_eq!(
-    //                 output.result, expected.result,
-    //                 "Sum aggregation should sum the dice results"
-    //             );
-    //         }
-    //     }
-    // }
+    #[test]
+    fn aggregation_count_values() {
+        let session = NumericSession::from_str(&String::from("+5 +10 +5 +10 +5 +22")).unwrap();
+        let session = session.count();
+        assert_eq!(session.rolls.len(), 3);
+
+        let count5 = session
+            .rolls
+            .iter()
+            .find(|roll| roll.description == "COUNT(5)")
+            .unwrap();
+        assert_eq!(count5.rolls[0], 3);
+        let count10 = session
+            .rolls
+            .iter()
+            .find(|roll| roll.description == "COUNT(10)")
+            .unwrap();
+        assert_eq!(count10.rolls[0], 2);
+        let count22 = session
+            .rolls
+            .iter()
+            .find(|roll| roll.description == "COUNT(22)")
+            .unwrap();
+        assert_eq!(count22.rolls[0], 1);
+    }
 }

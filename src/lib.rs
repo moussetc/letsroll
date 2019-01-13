@@ -12,10 +12,13 @@ use crate::actions::*;
 use crate::dice::*;
 use crate::errors::Error;
 use core::fmt::Debug;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct TypedRollSession<T: Debug, V: Debug + Clone> {
-    rolls: Vec<Rolls<T, V>>,
+    pub rolls: Vec<Rolls<T, V>>,
     dice: Dice,
 }
 
@@ -49,12 +52,20 @@ impl FudgeSession {
 }
 
 pub trait Session: Debug {
-    fn get_results(&self) -> String;
+    fn to_string(&self) -> String;
+
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error>;
+
+    fn write_results_to_file(&self, filepath: &str) -> std::io::Result<()> {
+        let path = Path::new(filepath);
+
+        let mut file = File::create(&path)?;
+        file.write_all(self.to_string().as_bytes())
+    }
 }
 
 impl Session for NumericSession {
-    fn get_results(&self) -> String {
+    fn to_string(&self) -> String {
         self.rolls
             .iter()
             .map(|roll| roll.to_string())
@@ -89,7 +100,6 @@ impl Session for NumericSession {
                     *rolls = rolls.reroll(&self.dice, &values_to_reroll);
                 }
             }
-            Action::CountValues => unimplemented!(),
             Action::RerollFudge(_) | Action::ExplodeFudge(_) => {
                 return Err(Error::incompatible(
                     &action.to_string(),
@@ -102,7 +112,7 @@ impl Session for NumericSession {
 }
 
 impl Session for FudgeSession {
-    fn get_results(&self) -> String {
+    fn to_string(&self) -> String {
         self.rolls
             .iter()
             .map(|roll| roll.to_string())
@@ -122,7 +132,6 @@ impl Session for FudgeSession {
                     *rolls = rolls.reroll(&self.dice, &values_to_reroll);
                 }
             }
-            Action::CountValues => unimplemented!(),
             Action::Sum
             | Action::Total
             | Action::MultiplyBy(_)
@@ -139,6 +148,27 @@ impl Session for FudgeSession {
     }
 }
 
+pub trait AggregatableSession: Debug {
+    fn aggregate(self, action: &Aggregation) -> NumericSession;
+}
+
+impl AggregatableSession for NumericSession {
+    fn aggregate(self, action: &Aggregation) -> NumericSession {
+        // TODO other kind of aggregation ?
+        match action {
+            Aggregation::CountValues => self.count(),
+        }
+    }
+}
+
+impl AggregatableSession for FudgeSession {
+    fn aggregate(self, action: &Aggregation) -> NumericSession {
+        match action {
+            Aggregation::CountValues => self.count(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MultiTypeSession {
     numeric_session: Option<NumericSession>,
@@ -146,14 +176,14 @@ pub struct MultiTypeSession {
 }
 
 impl Session for MultiTypeSession {
-    fn get_results(&self) -> String {
+    fn to_string(&self) -> String {
         let mut subresults: Vec<String> = vec![];
         match &self.numeric_session {
-            Some(session) => subresults.push(session.get_results()),
+            Some(session) => subresults.push(session.to_string()),
             None => (),
         };
         match &self.fudge_session {
-            Some(session) => subresults.push(session.get_results()),
+            Some(session) => subresults.push(session.to_string()),
             None => (),
         };
         subresults.join("\n")
@@ -171,127 +201,6 @@ impl Session for MultiTypeSession {
         Ok(())
     }
 }
-
-// pub fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
-//     // Handle actions that affect all dice first
-//     match &action {
-//         Action::Total => {
-//             // Compute total
-//             let total = self.dice_rolls.total(&self.dice_requests)?;
-//             let dice = DiceKind::Aggregate(AggregatedDice {
-//                 description: String::from("TOTAL"),
-//             });
-//             self.dice_requests.clear();
-//             self.dice_requests.push(RollRequest::new(dice, 1));
-//             self.dice_rolls.clear();
-//             self.dice_rolls.push(total);
-//             return Ok(());
-//         }
-//         _ => (),
-//     }
-//     //TODO instead of using indexes to know what dice to use for reroll, define a "dice ID" (later: will be a string, useable by users!)
-//     for (dice_index, rolls) in self.dice_rolls.iter_mut().enumerate() {
-//         let dice = self
-//             .dice_requests
-//             .get(dice_index)
-//             .expect("not supposed to happen! did an agregate screw everything up?");
-//         *rolls = match rolls {
-//             Rolls::NumericRolls(num_rolls) => match &dice.kind {
-//                 DiceKind::NumericKind(num_dice) => {
-//                     match RollRequest::add_step_numeric_input(num_dice, num_rolls, &action) {
-//                         Ok(new_rolls) => new_rolls,
-//                         Err(error) => Err(error)?,
-//                     }
-//                 }
-//                 _ => {
-//                     return Err(Error::incompatible(
-//                         &action.to_string(),
-//                         &String::from("numeric roll"),
-//                     ));
-//                 }
-//             },
-//             Rolls::FudgeRolls(text_rolls) => match &dice.kind {
-//                 DiceKind::TextKind(text_dice) => {
-//                     match RollRequest::add_step_text_input(text_dice, text_rolls, &action) {
-//                         Ok(new_rolls) => new_rolls,
-//                         Err(error) => Err(error)?,
-//                     }
-//                 }
-//                 _ => {
-//                     return Err(Error::incompatible(
-//                         &action.to_string(),
-//                         &String::from("text roll"),
-//                     ));
-//                 }
-//             },
-//             Rolls::Aggregation(_) => return Err(Error::new(ErrorKind::IncompatibleAction(
-//                 String::from("No action can be applied to an aggregated value (eg. the result of a total sum)"))))
-//         };
-//     }
-//     Ok(())
-// }
-
-// fn add_step_text_input(
-//     dice: &TextDice,
-//     text_rolls: &mut Vec<FudgeRoll>,
-//     action: &actions::Action,
-// ) -> Result<(Rolls), Error> {
-//     Ok(match action {
-//         Action::CountValues => Rolls::NumericRolls(text_rolls.count()),
-//         Action::RerollFudge(value_to_reroll) => match dice {
-//             TextDice::ConstDice(text_dice) => {
-//                 Rolls::FudgeRolls(text_rolls.reroll(text_dice, &value_to_reroll))
-//             }
-//             TextDice::FudgeDice(text_dice) => {
-//                 Rolls::FudgeRolls(text_rolls.reroll(text_dice, &value_to_reroll))
-//             }
-//             TextDice::RepeatingDice(text_dice) => {
-//                 Rolls::FudgeRolls(text_rolls.reroll(text_dice, &value_to_reroll))
-//             }
-//         },
-//         _ => {
-//             return Err(Error::new(ErrorKind::IncompatibleAction(format!(
-//                 "Action {:?} not supported by roll type {:?}",
-//                 action,
-//                 String::from("text roll")
-//             ))))
-//         }
-//     })
-// }
-
-// fn add_step_numeric_input(
-//     dice: &NumericDice,
-//     num_rolls: &mut Vec<NumericRoll>,
-//     action: &actions::Action,
-// ) -> Result<(Rolls), Error> {
-//     Ok(Rolls::NumericRolls(match action {
-//         Action::CountValues => num_rolls.count(),
-//         Action::FlipFlop => match dice {
-//             NumericDice::ConstDice(dice) => num_rolls.flip(dice),
-//             NumericDice::NumberedDice(dice) => num_rolls.flip(dice),
-//             NumericDice::RepeatingDice(dice) => num_rolls.flip(dice),
-//         },
-//         Action::RerollNumeric(value_to_reroll) => match dice {
-//             NumericDice::ConstDice(dice) => num_rolls.reroll(dice, &value_to_reroll),
-//             NumericDice::NumberedDice(dice) => num_rolls.reroll(dice, &value_to_reroll),
-//             NumericDice::RepeatingDice(dice) => num_rolls.reroll(dice, &value_to_reroll),
-//         },
-//         Action::Explode(explosion_value) => match dice {
-//             NumericDice::ConstDice(dice) => num_rolls.explode(dice, &explosion_value),
-//             NumericDice::NumberedDice(dice) => num_rolls.explode(dice, &explosion_value),
-//             NumericDice::RepeatingDice(dice) => num_rolls.explode(dice, &explosion_value),
-//         },
-//         Action::MultiplyBy(factor) => num_rolls.multiply(*factor),
-//         Action::Sum => num_rolls.sum(),
-//         _ => {
-//             return Err(Error::new(ErrorKind::IncompatibleAction(format!(
-//                 "Action {:?} not supported by roll type {:?}",
-//                 action,
-//                 String::from("numeric roll")
-//             ))))
-//         }
-//     }))
-// }
 
 #[cfg(test)]
 mod tests {

@@ -1,4 +1,4 @@
-use letsroll::dice::{FudgeDice, FudgeRoll, RollRequest};
+use letsroll::dice::{FudgeDice, RollRequest};
 use letsroll::{FudgeSession, Session};
 
 fn main() {
@@ -6,5 +6,5 @@ fn main() {
 
     let request = FudgeSession::new(dice_request);
 
-    println!("{}", request.get_results());
+    println!("{}", request.to_string());
 }
