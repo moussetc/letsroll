@@ -314,15 +314,10 @@ impl<T: Hash + Eq> CountValues<Vec<NumericRoll>> for Vec<T> {
 #[cfg(test)]
 mod tests {
     use crate::actions::*;
-    // use crate::dice::{ConstDice, NumberedDice, NumericRoll, RepeatingDice};
 
     static NUM_INPUT: &[NumericRoll] = &[1, 1, 1, 15, 100];
 
-    // #[test]
-    // fn transform_count_values() {
-    //     //TODO
-    //     // :( It's useless to return sums without the associated value! Argh.
-    // }
+    //TODO assert descriptions after actions
 
     #[test]
     fn transform_multiply() {
@@ -335,7 +330,6 @@ mod tests {
         );
         let output = rolls_result.multiply(factor);
         assert_eq!(output.rolls.len(), expected.len());
-        //TODO assert description after action
         for i in 0..expected.len() - 1 {
             assert_eq!(output.rolls[i], expected[i] * factor);
         }
@@ -363,41 +357,47 @@ mod tests {
         assert_eq!(output.rolls, expected);
     }
 
-    // #[test]
-    // fn transform_reroll_num() {
-    //     let mut input = NUM_INPUT.to_vec();
-    //     let output = input.reroll(&ConstDice::new(42), &1);
-    //     let expected = vec![42, 42, 42, 15, 100];
-    //     assert_eq!(output.len(), expected.len());
-    //     for i in 0..expected.len() - 1 {
-    //         assert_eq!(output[i], expected[i]);
-    //     }
-    // }
+    #[test]
+    fn transform_reroll_num() {
+        let input = NUM_INPUT.to_vec();
+        let dice_request =
+            NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
+        let dice = Dice::new();
+        let rolls = NumericRolls::new(dice_request, &dice);
+        let output = rolls.reroll(&dice, &100);
+        let expected = vec![1, 1, 1, 15, 1];
+        assert_eq!(output.rolls, expected);
+    }
 
-    // #[test]
-    // fn transform_reroll_text() {
-    //     let mut input = vec![' ', '+', '-', '+', '-'];
-    //     let output = input.reroll(&ConstDice::new(' '), &'-');
-    //     let expected = vec![' ', '+', ' ', '+', ' '];
-    //     assert_eq!(output.len(), expected.len());
-    //     for i in 0..expected.len() - 1 {
-    //         assert_eq!(output[i], expected[i]);
-    //     }
-    // }
+    #[test]
+    fn transform_reroll_fudge() {
+        let input = vec![FudgeRoll::Blank, FudgeRoll::Plus, FudgeRoll::Minus];
+        let dice_request =
+            FudgeRollRequest::new(input.len() as DiceNumber, FudgeDice::RepeatingDice(input));
+        let dice = Dice::new();
+        let rolls = FudgeRolls::new(dice_request, &dice);
+        let output = rolls.reroll(&dice, &FudgeRoll::Minus);
+        let expected = vec![FudgeRoll::Blank, FudgeRoll::Plus, FudgeRoll::Blank];
+        assert_eq!(output.rolls, expected);
+    }
 
     #[test]
     fn transform_explode() {
         let input = vec![1, 2, 3, 2, 1];
-        let dice_request = NumericRollRequest::new(
-            input.len() as DiceNumber,
-            NumericDice::RepeatingDice(vec![1, 2, 3, 2, 1]),
-        );
+        let dice_request =
+            NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
         let dice = Dice::new();
         let rolls = NumericRolls::new(dice_request, &dice);
         let output = rolls.explode(&dice, &2);
         let expected = vec![1, 2, 3, 2, 1, 1, 2, 1];
         assert_eq!(output.rolls, expected);
     }
+
+    // #[test]
+    // fn transform_count_values() {
+    //     //TODO
+    //     // :( It's useless to return sums without the associated value! Argh.
+    // }
 
     // #[test]
     // fn aggregate_total_sum() {
