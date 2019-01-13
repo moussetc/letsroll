@@ -1,6 +1,6 @@
 use crate::actions::Action;
 use crate::dice::*;
-use crate::errors::Error;
+use crate::errors::{Error, ErrorKind};
 use crate::{FudgeSession, FullRollSession, NumericSession, Session, TypedRollSession};
 use std::str::FromStr;
 
@@ -9,6 +9,21 @@ use pest::Parser;
 #[derive(Parser)]
 #[grammar = "roll_request.pest"]
 pub struct RequestParser;
+
+impl FromStr for FudgeRoll {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            x if x == "+" => Ok(FudgeRoll::Plus),
+            x if x == "-" => Ok(FudgeRoll::Minus),
+            x if x == "0" => Ok(FudgeRoll::Blank),
+            _ => Err(Error::new(ErrorKind::Parse(format!(
+                "Can't read '{}' as a fudge roll value",
+                s
+            )))),
+        }
+    }
+}
 
 pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
     match RequestParser::parse(Rule::roll_request, s) {
@@ -98,28 +113,36 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
                                     actions.push(Action::MultiplyBy(factor));
                                 }
                                 Rule::action_reroll => {
-                                    let reroll_value: NumericRoll;
                                     let rule = action.into_inner().next().unwrap();
                                     match rule.as_rule() {
                                         Rule::num_roll_value => {
-                                            reroll_value =
+                                            let reroll_value =
                                                 rule.as_str().parse::<NumericRoll>().unwrap();
+                                            actions.push(Action::RerollNumeric(reroll_value));
+                                        }
+                                        Rule::fudge_roll_value => {
+                                            let reroll_value =
+                                                rule.as_str().parse::<FudgeRoll>().unwrap();
+                                            actions.push(Action::RerollFudge(reroll_value));
                                         }
                                         _ => unreachable!(),
-                                    }
-                                    actions.push(Action::RerollNumeric(reroll_value));
+                                    };
                                 }
                                 Rule::action_explode => {
-                                    let explode_value: NumericRoll;
                                     let rule = action.into_inner().next().unwrap();
                                     match rule.as_rule() {
                                         Rule::num_roll_value => {
-                                            explode_value =
+                                            let explode_value =
                                                 rule.as_str().parse::<NumericRoll>().unwrap();
+                                            actions.push(Action::Explode(explode_value));
+                                        }
+                                        Rule::fudge_roll_value => {
+                                            let explode_value =
+                                                rule.as_str().parse::<FudgeRoll>().unwrap();
+                                            actions.push(Action::ExplodeFudge(explode_value));
                                         }
                                         _ => unreachable!(),
-                                    }
-                                    actions.push(Action::Explode(explode_value));
+                                    };
                                 }
                                 // TODO : add other actions
                                 _ => unreachable!(),

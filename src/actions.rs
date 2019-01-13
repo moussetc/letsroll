@@ -29,8 +29,10 @@ pub enum Action {
     MultiplyBy(NumericRoll),
     /// Invert the digits of the rolls (numeric rolls only, cf. trait [FlipFlop](trait.FlipFlop.html)).   
     FlipFlop,
-    /// Add new rolls for rolls equal to the highest value possible (numeric rolls only, cf. trait [Explode](trait.Explode.html)).   
+    /// Add new rolls for rolls equal to the action parameter (numeric rolls only, cf. trait [Explode](trait.Explode.html)).   
     Explode(NumericRoll),
+    /// Add new rolls for rolls equal to the action parameter (fudge rolls only, cf. trait [Explode](trait.Explode.html)).   
+    ExplodeFudge(FudgeRoll),
 }
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -232,11 +234,11 @@ impl Sum<NumericRolls> for NumericRolls {
 /// # Warning
 /// Don't use on a [ConstDice](../dice/struct.ConstDice.html) result with the same ConstDice for rerolls: it would end in stack overflow since the highest value=only value will always be rerolled
 pub trait Explode<T: Debug, V: Debug + Clone> {
-    fn explode(&self, dice: &Dice, explosion_value: &T) -> Rolls<T, V>;
+    fn explode(&self, dice: &Roll<T, V>, explosion_value: &T) -> Rolls<T, V>;
 }
 
-impl Explode<NumericRoll, NumericDice> for NumericRolls {
-    fn explode(&self, dice: &Dice, explosion_value: &NumericRoll) -> NumericRolls {
+impl<T: Debug + Display + PartialEq + Clone, V: Debug + Clone> Explode<T, V> for Rolls<T, V> {
+    fn explode(&self, dice: &Roll<T, V>, explosion_value: &T) -> Rolls<T, V> {
         Rolls {
             description: format!("{} explode({})", self.description, &explosion_value),
             dice_request: self.dice_request.clone(),

@@ -86,7 +86,7 @@ impl Session for NumericSession {
                 }
             }
             Action::CountValues => unimplemented!(),
-            Action::RerollFudge(_) => {
+            Action::RerollFudge(_) | Action::ExplodeFudge(_) => {
                 return Err(Error::incompatible(
                     &action.to_string(),
                     &String::from("numeric roll"),
@@ -103,7 +103,31 @@ impl Session for FudgeSession {
     }
 
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
-        unimplemented!();
+        match action {
+            Action::ExplodeFudge(explosion_value) => {
+                for rolls in self.rolls.iter_mut() {
+                    *rolls = rolls.explode(&self.dice, &explosion_value);
+                }
+            }
+            Action::RerollFudge(values_to_reroll) => {
+                for rolls in self.rolls.iter_mut() {
+                    *rolls = rolls.reroll(&self.dice, &values_to_reroll);
+                }
+            }
+            Action::CountValues => unimplemented!(),
+            Action::Sum
+            | Action::Total
+            | Action::MultiplyBy(_)
+            | Action::FlipFlop
+            | Action::RerollNumeric(_)
+            | Action::Explode(_) => {
+                return Err(Error::incompatible(
+                    &action.to_string(),
+                    &String::from("fudge roll"),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
