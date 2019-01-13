@@ -52,7 +52,7 @@ fn run(args: Args) -> Result<(), Error> {
         None => args.arg_dice,
     };
 
-    let roll_sessions = letsroll::io::read::parse_request(&request_to_parse);
+    let roll_sessions = letsroll::io::read::parse_request(&request_to_parse, true);
     println!("{:?}", roll_sessions);
     match roll_sessions {
         Err(msg) => return Err(msg),

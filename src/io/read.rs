@@ -30,7 +30,7 @@ impl FromStr for FudgeRoll {
 impl FromStr for NumericSession {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_request(s)?
+        parse_request(s, false)?
             .numeric_session
             .ok_or(Error::new(ErrorKind::Parse(String::from(
                 "Could not parse numeric roll request",
@@ -41,7 +41,7 @@ impl FromStr for NumericSession {
 impl FromStr for FudgeSession {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_request(s)?
+        parse_request(s, false)?
             .fudge_session
             .ok_or(Error::new(ErrorKind::Parse(String::from(
                 "Could not parse fudge roll request",
@@ -49,7 +49,14 @@ impl FromStr for FudgeSession {
     }
 }
 
-pub fn parse_request(s: &str) -> Result<MultiTypeSession, Error> {
+/// Try to parse a roll request from an input String.
+/// Roll sessions are created for each type of dice present (numeric and fudge dice don't mix).AggregatableSession
+///
+/// # Arguments
+/// * `s` Input string
+/// * `default_total` If set to `true`, in the absence of a parsed aggregation, the `ToTal` action will be applied to numeric rolls.
+/// This is allows users not to have to specify the Sum action each time they do a classic roll requiring the total.
+pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, Error> {
     match RequestParser::parse(Rule::roll_request, s) {
         Err(err) => Err(Error::from(err)),
         Ok(mut parsed_roll_request) => {
@@ -124,6 +131,8 @@ pub fn parse_request(s: &str) -> Result<MultiTypeSession, Error> {
                 }
                 if aggregation.is_some() {
                     session = session.aggregate(&aggregation.unwrap());
+                } else if default_total && !actions.contains(&Action::Total) {
+                    session.add_step(Action::Total)?;
                 }
                 res.numeric_session = Some(session);
             }
