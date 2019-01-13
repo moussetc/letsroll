@@ -8,7 +8,9 @@ use letsroll::errors::Error;
 
 use letsroll;
 use std::fs;
-
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
 // Write the Docopt usage string.
 const USAGE: &'static str = "
 Usage: letsroll <dice> [-s <savepath>]
@@ -18,7 +20,7 @@ Usage: letsroll <dice> [-s <savepath>]
 Options:
     -h --help    Show this screen.
     -f, --file   Read the dice request from a file.
-    -s, --save   Saves the results in a file.
+    -s, --save   Saves the rolls request to a file for future use. Tip: use .roll file extension!
 ";
 
 #[derive(Debug, Deserialize)]
@@ -56,15 +58,22 @@ fn run(args: Args) -> Result<(), Error> {
         Ok(ref req) => {
             println!("Rolling...\n{}", req.to_string());
             match &args.arg_savepath {
-                Some(save_path) => match req.write_results_to_file(&save_path) {
+                Some(save_path) => match write_to_file(&request_to_parse, &save_path) {
                     Ok(_) => {
-                        println!("Wrote results to file {}", save_path);
+                        println!("Wrote rolls request to file {}", save_path);
                         Ok(())
                     }
                     Err(msg) => return Err(Error::from(msg)),
                 },
                 _ => Ok(()),
             }
+            }
         }
-    }
 }
+
+fn write_to_file(content: &String, filepath: &str) -> std::io::Result<()> {
+        let path = Path::new(filepath);
+
+        let mut file = File::create(&path)?;
+        file.write_all(content.to_string().as_bytes())
+    }
