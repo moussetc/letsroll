@@ -15,12 +15,12 @@ use std::fmt;
 use std::hash::Hash;
 
 /// Enumeration of all possible actions
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Action {
-    /// Rerolls the dice for the values equal to the action parameter (numeric rolls only, cf. trait [Reroll](trait.Reroll.html)).
-    RerollNumeric(NumericRoll),
-    /// Rerolls the dice for the values equal to the action parameter (fudge rolls only, cf. trait [Reroll](trait.Reroll.html)).
-    RerollFudge(FudgeRoll),
+    /// Rerolls the dice for the values equal to the action parameters (numeric rolls only, cf. trait [Reroll](trait.Reroll.html)).
+    RerollNumeric(Vec<NumericRoll>),
+    /// Rerolls the dice for the values equal to the action parameters (fudge rolls only, cf. trait [Reroll](trait.Reroll.html)).
+    RerollFudge(Vec<FudgeRoll>),
     /// Sum the rolls for each dice (numeric rolls only, cf. trait [Sum](trait.Sum.html)).
     Sum,
     // Sum all the dice (numeric rolls only, cf. trait [TotalSum](trait.TotalSum.html)).
@@ -29,10 +29,10 @@ pub enum Action {
     MultiplyBy(NumericRoll),
     /// Invert the digits of the rolls (numeric rolls only, cf. trait [FlipFlop](trait.FlipFlop.html)).   
     FlipFlop,
-    /// Add new rolls for rolls equal to the action parameter (numeric rolls only, cf. trait [Explode](trait.Explode.html)).   
-    Explode(NumericRoll),
-    /// Add new rolls for rolls equal to the action parameter (fudge rolls only, cf. trait [Explode](trait.Explode.html)).   
-    ExplodeFudge(FudgeRoll),
+    /// Add new rolls for rolls equal to the action parameters (numeric rolls only, cf. trait [Explode](trait.Explode.html)).   
+    Explode(Vec<NumericRoll>),
+    /// Add new rolls for rolls equal to the action parameters (fudge rolls only, cf. trait [Explode](trait.Explode.html)).   
+    ExplodeFudge(Vec<FudgeRoll>),
 }
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -88,24 +88,31 @@ impl MultiplyBy<NumericRolls> for NumericRolls {
 /// let dice = Dice::new();
 /// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
 /// let rolls = NumericRolls::new(dice_request, &dice);
-/// assert_eq!(rolls.reroll(&dice, &1).rolls, vec![5,5,10]);
+/// assert_eq!(rolls.reroll(&dice, &vec![1]).rolls, vec![5,5,10]);
 /// ```
 pub trait Reroll<T: Debug, V: Clone + Debug> {
-    fn reroll(&self, dice: &Roll<T, V>, t: &T) -> Rolls<T, V>;
+    fn reroll(&self, dice: &Roll<T, V>, t: &Vec<T>) -> Rolls<T, V>;
 }
 impl<T: PartialEq + Debug + Display + Copy, V: Clone + Debug> Reroll<T, V> for Rolls<T, V> {
     // TODO should the new roll be suject to the same action ?
-    fn reroll(&self, dice: &Roll<T, V>, t: &T) -> Rolls<T, V> {
+    fn reroll(&self, dice: &Roll<T, V>, t: &Vec<T>) -> Rolls<T, V> {
         let mut new_rolls: Vec<T> = vec![];
         for roll in self.rolls.iter() {
-            if roll == t {
+            if t.contains(roll) {
                 new_rolls.append(&mut dice.roll(1, &self.dice_request.dice));
             } else {
                 new_rolls.push(*roll);
             }
         }
         Rolls {
-            description: format!("{} Reroll({})", self.description, t),
+            description: format!(
+                "{} Reroll({})",
+                self.description,
+                t.iter()
+                    .map(|val| val.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            ),
             dice_request: self.dice_request.clone(),
             rolls: new_rolls,
         }
@@ -192,7 +199,7 @@ impl Sum<NumericRolls> for NumericRolls {
     }
 }
 
-/// Explode rerolls the dice whenever the highest value is rolled.
+/// Explode rerolls the dice whenever the roll is equals to one of the action parameters.
 /// The new rolls can also trigger an explosion.
 ///
 /// # Example
@@ -206,20 +213,28 @@ impl Sum<NumericRolls> for NumericRolls {
 /// let dice = Dice::new();
 /// let rolls = NumericRolls::new(dice_request, &dice);
 /// let expected = vec![1, 2, 3, 2, 1, 1, 2, 1];
-/// assert_eq!(rolls.explode(&dice, &2).rolls, expected);
+/// assert_eq!(rolls.explode(&dice, &vec![2, 5]).rolls, expected);
 /// ```
 /// # Warning
 /// Don't use on a [ConstDice](../dice/struct.ConstDice.html) result with the same ConstDice for rerolls: it would end in stack overflow since the highest value=only value will always be rerolled
 pub trait Explode<T: Debug, V: Debug + Clone> {
-    fn explode(&self, dice: &Roll<T, V>, explosion_value: &T) -> Rolls<T, V>;
+    fn explode(&self, dice: &Roll<T, V>, explosion_values: &Vec<T>) -> Rolls<T, V>;
 }
 
 impl<T: Debug + Display + PartialEq + Clone, V: Debug + Clone> Explode<T, V> for Rolls<T, V> {
-    fn explode(&self, dice: &Roll<T, V>, explosion_value: &T) -> Rolls<T, V> {
+    fn explode(&self, dice: &Roll<T, V>, explosion_values: &Vec<T>) -> Rolls<T, V> {
         Rolls {
-            description: format!("{} explode({})", self.description, &explosion_value),
+            description: format!(
+                "{} explode({})",
+                self.description,
+                &explosion_values
+                    .iter()
+                    .map(|val| val.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            ),
             dice_request: self.dice_request.clone(),
-            rolls: explode(&self.rolls, dice, &self.dice_request.dice, explosion_value),
+            rolls: explode(&self.rolls, dice, &self.dice_request.dice, explosion_values),
         }
     }
 }
@@ -228,15 +243,18 @@ fn explode<T: Clone + PartialEq, V>(
     rolls: &Vec<T>,
     dice: &Roll<T, V>,
     dicekind: &V,
-    explosion_value: &T,
+    explosion_values: &Vec<T>,
 ) -> Vec<T> {
     let mut rolls = rolls.clone();
     if rolls.len() != 0 {
         let new_rolls = dice.roll(
-            rolls.iter().filter(|roll| *roll == explosion_value).count() as DiceNumber,
+            rolls
+                .iter()
+                .filter(|roll| explosion_values.contains(roll))
+                .count() as DiceNumber,
             dicekind,
         );
-        rolls.append(&mut explode(&new_rolls, dice, dicekind, explosion_value));
+        rolls.append(&mut explode(&new_rolls, dice, dicekind, explosion_values));
     }
     rolls
 }
@@ -362,7 +380,7 @@ mod tests {
             NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
         let dice = Dice::new();
         let rolls = NumericRolls::new(dice_request, &dice);
-        let output = rolls.reroll(&dice, &100);
+        let output = rolls.reroll(&dice, &vec![100]);
         let expected = vec![1, 1, 1, 15, 1];
         assert_eq!(output.rolls, expected);
     }
@@ -374,7 +392,7 @@ mod tests {
             FudgeRollRequest::new(input.len() as DiceNumber, FudgeDice::RepeatingDice(input));
         let dice = Dice::new();
         let rolls = FudgeRolls::new(dice_request, &dice);
-        let output = rolls.reroll(&dice, &FudgeRoll::Minus);
+        let output = rolls.reroll(&dice, &vec![FudgeRoll::Minus]);
         let expected = vec![FudgeRoll::Blank, FudgeRoll::Plus, FudgeRoll::Blank];
         assert_eq!(output.rolls, expected);
     }
@@ -386,8 +404,8 @@ mod tests {
             NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
         let dice = Dice::new();
         let rolls = NumericRolls::new(dice_request, &dice);
-        let output = rolls.explode(&dice, &2);
-        let expected = vec![1, 2, 3, 2, 1, 1, 2, 1];
+        let output = rolls.explode(&dice, &vec![2, 3]);
+        let expected = vec![1, 2, 3, 2, 1, 1, 2, 3, 1, 2, 1];
         assert_eq!(output.rolls, expected);
     }
 

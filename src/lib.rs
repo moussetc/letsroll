@@ -191,11 +191,11 @@ impl Session for MultiTypeSession {
 
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
         match &mut self.numeric_session {
-            Some(ref mut session) => session.add_step(action)?,
+            Some(ref mut session) => session.add_step(action.clone())?,
             None => (),
         };
         match &mut self.fudge_session {
-            Some(ref mut session) => session.add_step(action)?,
+            Some(ref mut session) => session.add_step(action.clone())?,
             None => (),
         };
         Ok(())

@@ -127,11 +127,11 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
             if num_request_dice.len() > 0 {
                 let mut session = NumericSession::new(num_request_dice);
                 for action in actions.iter() {
-                    session.add_step(*action)?;
+                    session.add_step(action.clone())?;
                 }
                 if aggregation.is_some() {
                     session = session.aggregate(&aggregation.unwrap());
-                } else if default_total && !actions.contains(&Action::Total) {
+                } else if default_total && aggregation.is_none() && actions.len() == 0 {
                     session.add_step(Action::Total)?;
                 }
                 res.numeric_session = Some(session);
@@ -139,7 +139,7 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
             if fudge_request_dice.len() > 0 {
                 let mut session = FudgeSession::new(fudge_request_dice);
                 for action in actions.iter() {
-                    session.add_step(*action)?;
+                    session.add_step(action.clone())?;
                 }
                 if aggregation.is_some() {
                     let mut num_session = session.aggregate(&aggregation.unwrap());
@@ -214,32 +214,46 @@ fn parse_fudge_dice(dice: pest::iterators::Pair<'_, Rule>) -> Result<FudgeRollRe
 }
 
 fn parse_reroll_action(action: pest::iterators::Pair<'_, Rule>) -> Result<Action, Error> {
-    let rule = action.into_inner().next().unwrap();
-    match rule.as_rule() {
-        Rule::num_roll_value => {
-            let reroll_value = rule.as_str().parse::<NumericRoll>()?;
-            Ok(Action::RerollNumeric(reroll_value))
+    let mut num_values: Vec<NumericRoll> = vec![];
+    let mut fudge_values: Vec<FudgeRoll> = vec![];
+    for rule in action.into_inner() {
+        match rule.as_rule() {
+            Rule::num_roll_value => {
+                num_values.push(rule.as_str().parse::<NumericRoll>()?);
+            }
+            Rule::fudge_roll_value => {
+                fudge_values.push(rule.as_str().parse::<FudgeRoll>()?);
+            }
+            _ => unreachable!(),
         }
-        Rule::fudge_roll_value => {
-            let reroll_value = rule.as_str().parse::<FudgeRoll>()?;
-            Ok(Action::RerollFudge(reroll_value))
-        }
-        _ => unreachable!(),
+    }
+    // The grammar syntax enforce that there is at least one value
+    // and that only values of the same type are present.
+    match num_values.len() {
+        x if x > 0 => Ok(Action::RerollNumeric(num_values)),
+        _ => Ok(Action::RerollFudge(fudge_values)),
     }
 }
 
 fn parse_explode_action(action: pest::iterators::Pair<'_, Rule>) -> Result<Action, Error> {
-    let rule = action.into_inner().next().unwrap();
-    match rule.as_rule() {
-        Rule::num_roll_value => {
-            let explode_value = rule.as_str().parse::<NumericRoll>().unwrap();
-            Ok(Action::Explode(explode_value))
+    let mut num_values: Vec<NumericRoll> = vec![];
+    let mut fudge_values: Vec<FudgeRoll> = vec![];
+    for rule in action.into_inner() {
+        match rule.as_rule() {
+            Rule::num_roll_value => {
+                num_values.push(rule.as_str().parse::<NumericRoll>()?);
+            }
+            Rule::fudge_roll_value => {
+                fudge_values.push(rule.as_str().parse::<FudgeRoll>()?);
+            }
+            _ => unreachable!(),
         }
-        Rule::fudge_roll_value => {
-            let explode_value = rule.as_str().parse::<FudgeRoll>().unwrap();
-            Ok(Action::ExplodeFudge(explode_value))
-        }
-        _ => unreachable!(),
+    }
+    // The grammar syntax enforce that there is at least one value
+    // and that only values of the same type are present.
+    match num_values.len() {
+        x if x > 0 => Ok(Action::Explode(num_values)),
+        _ => Ok(Action::ExplodeFudge(fudge_values)),
     }
 }
 
@@ -315,15 +329,15 @@ mod tests {
 
     #[test]
     fn read_ko() {
-        parse_request(&String::from("5")).unwrap_err();
-        parse_request(&String::from("Da")).unwrap_err();
-        parse_request(&String::from("D8D")).unwrap_err();
-        parse_request(&String::from("F8")).unwrap_err();
-        parse_request(&String::from("+")).unwrap_err();
-        parse_request(&String::from("8+")).unwrap_err();
-        parse_request(&String::from("+8+")).unwrap_err();
-        parse_request(&String::from("2+8")).unwrap_err();
-        parse_request(&String::from("5D 20")).unwrap_err();
+        parse_request(&String::from("5"), false).unwrap_err();
+        parse_request(&String::from("Da"), false).unwrap_err();
+        parse_request(&String::from("D8D"), false).unwrap_err();
+        parse_request(&String::from("F8"), false).unwrap_err();
+        parse_request(&String::from("+"), false).unwrap_err();
+        parse_request(&String::from("8+"), false).unwrap_err();
+        parse_request(&String::from("+8+"), false).unwrap_err();
+        parse_request(&String::from("2+8"), false).unwrap_err();
+        parse_request(&String::from("5D 20"), false).unwrap_err();
     }
 
 }

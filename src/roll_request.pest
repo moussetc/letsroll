@@ -17,8 +17,8 @@ action_mult = ${ ^"x" ~ factor }
 
 num_roll_value = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 fudge_roll_value = @{ "+" | "-" | "0" }
-action_reroll = ${ ^"Reroll(" ~ (num_roll_value | fudge_roll_value) ~ ")" }
-action_explode = ${ ^"Explode(" ~ (num_roll_value | fudge_roll_value) ~ ")" }
+action_reroll = ${ ^"Reroll(" ~ ((num_roll_value ~ ("," ~ num_roll_value)* ) | (fudge_roll_value ~ ("," ~ fudge_roll_value)* )) ~ ")" }
+action_explode = ${ ^"Explode(" ~ ((num_roll_value ~ ("," ~ num_roll_value)* ) | (fudge_roll_value ~ ("," ~ fudge_roll_value)* )) ~ ")" }
 action = ${ action_sum | action_flip | action_total | action_mult | action_explode | action_reroll }
 
 aggregation_count = @{ ^"Count" }
