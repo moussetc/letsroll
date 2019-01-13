@@ -45,20 +45,36 @@ pub struct Dice {
     rng_ref: RefCell<ThreadRng>,
 }
 
-impl Dice {
-    pub fn new() -> Dice {
-        Dice {
-            rng_ref: RefCell::new(rand::thread_rng()),
-        }
-    }
+pub trait Roll<T, V> {
+    fn roll(&self, n: DiceNumber, dice: &V) -> Vec<T>;
+}
 
-    pub fn roll_numeric_dice(&self, n: DiceNumber, dice: &NumericDice) -> Vec<NumericRoll> {
+impl Roll<NumericRoll, NumericDice> for Dice {
+    fn roll(&self, n: DiceNumber, dice: &NumericDice) -> Vec<NumericRoll> {
         match dice {
             NumericDice::ConstDice(const_value) => self.roll_const_dice(n, const_value),
             NumericDice::NumberedDice(sides) => self.roll_numbered_dice(n, sides),
             NumericDice::RepeatingDice(repeating_values) => {
                 self.roll_repeating(n, repeating_values)
             }
+        }
+    }
+}
+
+impl Roll<FudgeRoll, FudgeDice> for Dice {
+    fn roll(&self, n: DiceNumber, dice: &FudgeDice) -> Vec<FudgeRoll> {
+        match dice {
+            FudgeDice::ConstDice(const_value) => self.roll_const_dice(n, const_value),
+            FudgeDice::FudgeDice => self.roll_fudge_dice(n),
+            FudgeDice::RepeatingDice(repeating_values) => self.roll_repeating(n, repeating_values),
+        }
+    }
+}
+
+impl Dice {
+    pub fn new() -> Dice {
+        Dice {
+            rng_ref: RefCell::new(rand::thread_rng()),
         }
     }
 
@@ -77,14 +93,6 @@ impl Dice {
     pub fn roll_numbered_dice(&self, n: DiceNumber, sides: &NumericRoll) -> Vec<NumericRoll> {
         let mut rng = self.rng_ref.borrow_mut();
         (1..n + 1).map(|_| rng.gen_range(1, sides + 1)).collect()
-    }
-
-    pub fn roll_fudgey_dice(&self, n: DiceNumber, dice: &FudgeDice) -> Vec<FudgeRoll> {
-        match dice {
-            FudgeDice::ConstDice(const_value) => self.roll_const_dice(n, const_value),
-            FudgeDice::FudgeDice => self.roll_fudge_dice(n),
-            FudgeDice::RepeatingDice(repeating_values) => self.roll_repeating(n, repeating_values),
-        }
     }
 
     pub fn roll_fudge_dice(&self, n: DiceNumber) -> Vec<FudgeRoll> {
@@ -126,7 +134,7 @@ impl NumericRolls {
     pub fn new(dice_request: NumericRollRequest, dice: &Dice) -> NumericRolls {
         Rolls {
             description: dice_request.to_string(),
-            rolls: dice.roll_numeric_dice(dice_request.number, &dice_request.dice),
+            rolls: dice.roll(dice_request.number, &dice_request.dice),
             dice_request,
         }
     }
@@ -138,7 +146,7 @@ impl FudgeRolls {
     pub fn new(dice_request: FudgeRollRequest, dice: &Dice) -> FudgeRolls {
         Rolls {
             description: dice_request.to_string(),
-            rolls: dice.roll_fudgey_dice(dice_request.number, &dice_request.dice),
+            rolls: dice.roll(dice_request.number, &dice_request.dice),
             dice_request,
         }
     }
@@ -163,7 +171,7 @@ mod tests {
         let dice = Dice::new();
         let const_value = 42;
         let roll_number = 5;
-        let rolls = dice.roll_numeric_dice(roll_number, &NumericDice::ConstDice(const_value));
+        let rolls = dice.roll(roll_number, &NumericDice::ConstDice(const_value));
         assert_eq!(rolls.len(), roll_number as usize);
         for roll in rolls.iter() {
             assert_eq!(*roll, const_value);
@@ -171,7 +179,7 @@ mod tests {
 
         let const_value = FudgeRoll::Blank;
         let roll_number = 2;
-        let rolls = dice.roll_fudgey_dice(roll_number, &FudgeDice::ConstDice(const_value));
+        let rolls = dice.roll(roll_number, &FudgeDice::ConstDice(const_value));
         assert_eq!(rolls.len(), roll_number as usize);
         for roll in rolls.iter() {
             assert_eq!(*roll, const_value);
@@ -183,7 +191,7 @@ mod tests {
         let dice = Dice::new();
         let dice_sides = 42;
         let roll_number = 5;
-        let rolls = dice.roll_numeric_dice(roll_number, &NumericDice::NumberedDice(dice_sides));
+        let rolls = dice.roll(roll_number, &NumericDice::NumberedDice(dice_sides));
         assert_eq!(rolls.len(), roll_number as usize);
         for roll in rolls.iter() {
             assert!(*roll > 0, "Numbered dice generator rolls should be > 0");
@@ -200,19 +208,19 @@ mod tests {
         let repeating_values = vec![1, 2, 3, 4, 5];
 
         assert_eq!(
-            dice.roll_numeric_dice(0, &NumericDice::RepeatingDice(repeating_values.clone())),
+            dice.roll(0, &NumericDice::RepeatingDice(repeating_values.clone())),
             vec![]
         );
         assert_eq!(
-            dice.roll_numeric_dice(3, &NumericDice::RepeatingDice(repeating_values.clone())),
+            dice.roll(3, &NumericDice::RepeatingDice(repeating_values.clone())),
             vec![1, 2, 3]
         );
         assert_eq!(
-            dice.roll_numeric_dice(5, &NumericDice::RepeatingDice(repeating_values.clone())),
+            dice.roll(5, &NumericDice::RepeatingDice(repeating_values.clone())),
             vec![1, 2, 3, 4, 5]
         );
         assert_eq!(
-            dice.roll_numeric_dice(15, &NumericDice::RepeatingDice(repeating_values.clone())),
+            dice.roll(15, &NumericDice::RepeatingDice(repeating_values.clone())),
             vec![1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
         );
     }

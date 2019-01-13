@@ -82,9 +82,45 @@ pub fn parse_request(s: &str) -> Result<FullRollSession, Error> {
                         for action in dice_or_action.into_inner() {
                             match action.as_rule() {
                                 // TODO "Sum" after the dice is "total sum" which has to be implemented
-                                Rule::action_sum => actions.push(Action::Sum),
+                                Rule::action_sum => actions.push(Action::Total),
                                 Rule::action_flip => actions.push(Action::FlipFlop),
                                 Rule::action_total => actions.push(Action::Total),
+
+                                Rule::action_mult => {
+                                    let factor: NumericRoll;
+                                    let rule = action.into_inner().next().unwrap();
+                                    match rule.as_rule() {
+                                        Rule::factor => {
+                                            factor = rule.as_str().parse::<NumericRoll>().unwrap();
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                    actions.push(Action::MultiplyBy(factor));
+                                }
+                                Rule::action_reroll => {
+                                    let reroll_value: NumericRoll;
+                                    let rule = action.into_inner().next().unwrap();
+                                    match rule.as_rule() {
+                                        Rule::num_roll_value => {
+                                            reroll_value =
+                                                rule.as_str().parse::<NumericRoll>().unwrap();
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                    actions.push(Action::RerollNumeric(reroll_value));
+                                }
+                                Rule::action_explode => {
+                                    let explode_value: NumericRoll;
+                                    let rule = action.into_inner().next().unwrap();
+                                    match rule.as_rule() {
+                                        Rule::num_roll_value => {
+                                            explode_value =
+                                                rule.as_str().parse::<NumericRoll>().unwrap();
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                    actions.push(Action::Explode(explode_value));
+                                }
                                 // TODO : add other actions
                                 _ => unreachable!(),
                             }

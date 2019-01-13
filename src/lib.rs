@@ -58,7 +58,42 @@ impl Session for NumericSession {
         self.rolls.iter().map(|roll| roll.to_string()).collect()
     }
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
-        unimplemented!();
+        match action {
+            Action::Sum => {
+                for rolls in self.rolls.iter_mut() {
+                    *rolls = rolls.sum();
+                }
+            }
+            Action::Total => self.rolls = vec![self.rolls.total()],
+            Action::MultiplyBy(factor) => {
+                for rolls in self.rolls.iter_mut() {
+                    *rolls = rolls.multiply(factor);
+                }
+            }
+            Action::Explode(explosion_value) => {
+                for rolls in self.rolls.iter_mut() {
+                    *rolls = rolls.explode(&self.dice, &explosion_value);
+                }
+            }
+            Action::FlipFlop => {
+                for rolls in self.rolls.iter_mut() {
+                    *rolls = rolls.flip();
+                }
+            }
+            Action::RerollNumeric(values_to_reroll) => {
+                for rolls in self.rolls.iter_mut() {
+                    *rolls = rolls.reroll(&self.dice, &values_to_reroll);
+                }
+            }
+            Action::CountValues => unimplemented!(),
+            Action::RerollFudge(_) => {
+                return Err(Error::incompatible(
+                    &action.to_string(),
+                    &String::from("numeric roll"),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -93,7 +128,10 @@ impl Session for FullRollSession {
     }
 
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
-        unimplemented!();
+        self.subsessions
+            .iter_mut()
+            .map(|session| session.add_step(action))
+            .collect()
     }
 }
 
