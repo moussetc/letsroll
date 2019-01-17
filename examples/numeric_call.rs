@@ -7,6 +7,6 @@ fn main() {
         RollRequest::new(2, NumericDice::NumberedDice(6)),
     ];
 
-    let request = NumericSession::new(dice_request);
+    let request = NumericSession::build(dice_request);
     println!("{}", request.to_string());
 }

@@ -16,31 +16,84 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+/// TODO rename the damn struct when brain is working again
+#[derive(Debug)]
+pub struct RollAndActionsRequest<T: Clone> {
+    roll_request: RollRequest<T>,
+    pub actions: Vec<Action>,
+}
+
+pub type NumericRollAndActionRequest = RollAndActionsRequest<NumericDice>;
+pub type FudgeRollAndActionRequest = RollAndActionsRequest<FudgeDice>;
+
+impl<T: Clone> RollAndActionsRequest<T> {
+    pub fn new(roll_request: RollRequest<T>, actions: Vec<Action>) -> RollAndActionsRequest<T> {
+        RollAndActionsRequest {
+            roll_request,
+            actions,
+        }
+    }
+}
+
+impl FudgeRollAndActionRequest {
+    pub fn roll(self, dice: &DiceGenerator) -> Result<FudgeRolls, Error> {
+        let mut rolls = FudgeRolls::new(self.roll_request, dice);
+        for action in self.actions.iter() {
+            rolls = rolls.apply(action, dice)?;
+        }
+        Ok(rolls)
+    }
+}
+
+impl NumericRollAndActionRequest {
+    pub fn roll(self, dice: &DiceGenerator) -> Result<NumericRolls, Error> {
+        let mut rolls = NumericRolls::new(self.roll_request, dice);
+        for action in self.actions.iter() {
+            rolls = rolls.apply(action, dice)?;
+        }
+        Ok(rolls)
+    }
+}
+
 #[derive(Debug)]
 pub struct TypedRollSession<T: Debug, V: Debug + Clone> {
     pub rolls: Vec<Rolls<T, V>>,
-    dice: Dice,
+    dice: DiceGenerator,
 }
 
 pub type NumericSession = TypedRollSession<NumericRoll, NumericDice>;
 pub type FudgeSession = TypedRollSession<FudgeRoll, FudgeDice>;
 
 impl NumericSession {
-    pub fn new(dice_requests: Vec<NumericRollRequest>) -> NumericSession {
-        let dice = Dice::new();
-        TypedRollSession {
-            rolls: dice_requests
+    pub fn build(dice_requests: Vec<NumericRollRequest>) -> NumericSession {
+        NumericSession::build_with_actions(
+            dice_requests
                 .into_iter()
-                .map(|dice_request| NumericRolls::new(dice_request, &dice))
-                .collect(),
+                .map(|roll_request| RollAndActionsRequest::new(roll_request, vec![]))
+                .collect::<Vec<NumericRollAndActionRequest>>(),
+        )
+        // TODO for now, without action, there's no reason for it to fail. But who can know what the future holds?
+        .expect("How did this happen to us?")
+    }
+
+    pub fn build_with_actions(
+        requests: Vec<NumericRollAndActionRequest>,
+    ) -> Result<NumericSession, Error> {
+        let dice = DiceGenerator::new();
+        let rolls: Result<Vec<NumericRolls>, Error> = requests
+            .into_iter()
+            .map(|dice_request| dice_request.roll(&dice))
+            .collect();
+        Ok(TypedRollSession {
+            rolls: rolls?,
             dice,
-        }
+        })
     }
 }
 
 impl FudgeSession {
-    pub fn new(dice_requests: Vec<FudgeRollRequest>) -> FudgeSession {
-        let dice = Dice::new();
+    pub fn build(dice_requests: Vec<FudgeRollRequest>) -> FudgeSession {
+        let dice = DiceGenerator::new();
         TypedRollSession {
             rolls: dice_requests
                 .into_iter()
@@ -48,6 +101,20 @@ impl FudgeSession {
                 .collect(),
             dice,
         }
+    }
+
+    pub fn build_with_actions(
+        requests: Vec<FudgeRollAndActionRequest>,
+    ) -> Result<FudgeSession, Error> {
+        let dice = DiceGenerator::new();
+        let rolls: Result<Vec<FudgeRolls>, Error> = requests
+            .into_iter()
+            .map(|dice_request| dice_request.roll(&dice))
+            .collect();
+        Ok(TypedRollSession {
+            rolls: rolls?,
+            dice,
+        })
     }
 }
 
@@ -74,37 +141,11 @@ impl Session for NumericSession {
     }
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
         match action {
-            Action::Sum => {
-                for rolls in self.rolls.iter_mut() {
-                    *rolls = rolls.sum();
-                }
-            }
             Action::Total => self.rolls = vec![self.rolls.total()],
-            Action::MultiplyBy(factor) => {
+            _ => {
                 for rolls in self.rolls.iter_mut() {
-                    *rolls = rolls.multiply(factor);
+                    *rolls = rolls.apply(&action, &self.dice)?;
                 }
-            }
-            Action::Explode(explosion_value) => {
-                for rolls in self.rolls.iter_mut() {
-                    *rolls = rolls.explode(&self.dice, &explosion_value);
-                }
-            }
-            Action::FlipFlop => {
-                for rolls in self.rolls.iter_mut() {
-                    *rolls = rolls.flip();
-                }
-            }
-            Action::RerollNumeric(values_to_reroll) => {
-                for rolls in self.rolls.iter_mut() {
-                    *rolls = rolls.reroll(&self.dice, &values_to_reroll);
-                }
-            }
-            Action::RerollFudge(_) | Action::ExplodeFudge(_) => {
-                return Err(Error::incompatible(
-                    &action.to_string(),
-                    &String::from("numeric roll"),
-                ));
             }
         }
         Ok(())
@@ -121,28 +162,8 @@ impl Session for FudgeSession {
     }
 
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
-        match action {
-            Action::ExplodeFudge(explosion_value) => {
-                for rolls in self.rolls.iter_mut() {
-                    *rolls = rolls.explode(&self.dice, &explosion_value);
-                }
-            }
-            Action::RerollFudge(values_to_reroll) => {
-                for rolls in self.rolls.iter_mut() {
-                    *rolls = rolls.reroll(&self.dice, &values_to_reroll);
-                }
-            }
-            Action::Sum
-            | Action::Total
-            | Action::MultiplyBy(_)
-            | Action::FlipFlop
-            | Action::RerollNumeric(_)
-            | Action::Explode(_) => {
-                return Err(Error::incompatible(
-                    &action.to_string(),
-                    &String::from("fudge roll"),
-                ));
-            }
+        for rolls in self.rolls.iter_mut() {
+            *rolls = rolls.apply(&action, &self.dice)?;
         }
         Ok(())
     }

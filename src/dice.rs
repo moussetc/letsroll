@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 pub type DiceNumber = u8;
 /// Type of roll result for numbered dice (like D20)
-pub type NumericRoll = u16;
+pub type NumericRoll = u32;
 // Type of roll result for fudge dice (fate)
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum FudgeRoll {
@@ -43,7 +43,7 @@ pub enum FudgeDice {
 }
 
 #[derive(Debug)]
-pub struct Dice {
+pub struct DiceGenerator {
     rng_ref: RefCell<ThreadRng>,
 }
 
@@ -51,7 +51,7 @@ pub trait Roll<T, V> {
     fn roll(&self, n: DiceNumber, dice: &V) -> Vec<T>;
 }
 
-impl Roll<NumericRoll, NumericDice> for Dice {
+impl Roll<NumericRoll, NumericDice> for DiceGenerator {
     fn roll(&self, n: DiceNumber, dice: &NumericDice) -> Vec<NumericRoll> {
         match dice {
             NumericDice::ConstDice(const_value) => self.roll_const_dice(n, const_value),
@@ -64,7 +64,7 @@ impl Roll<NumericRoll, NumericDice> for Dice {
     }
 }
 
-impl Roll<FudgeRoll, FudgeDice> for Dice {
+impl Roll<FudgeRoll, FudgeDice> for DiceGenerator {
     fn roll(&self, n: DiceNumber, dice: &FudgeDice) -> Vec<FudgeRoll> {
         match dice {
             FudgeDice::ConstDice(const_value) => self.roll_const_dice(n, const_value),
@@ -74,9 +74,9 @@ impl Roll<FudgeRoll, FudgeDice> for Dice {
     }
 }
 
-impl Dice {
-    pub fn new() -> Dice {
-        Dice {
+impl DiceGenerator {
+    pub fn new() -> DiceGenerator {
+        DiceGenerator {
             rng_ref: RefCell::new(rand::thread_rng()),
         }
     }
@@ -134,7 +134,7 @@ pub struct Rolls<T: Debug, V: Debug + Clone> {
 pub type NumericRolls = Rolls<NumericRoll, NumericDice>;
 
 impl NumericRolls {
-    pub fn new(dice_request: NumericRollRequest, dice: &Dice) -> NumericRolls {
+    pub fn new(dice_request: NumericRollRequest, dice: &DiceGenerator) -> NumericRolls {
         Rolls {
             description: dice_request.to_string(),
             rolls: dice.roll(dice_request.number, &dice_request.dice),
@@ -146,7 +146,7 @@ impl NumericRolls {
 pub type FudgeRolls = Rolls<FudgeRoll, FudgeDice>;
 
 impl FudgeRolls {
-    pub fn new(dice_request: FudgeRollRequest, dice: &Dice) -> FudgeRolls {
+    pub fn new(dice_request: FudgeRollRequest, dice: &DiceGenerator) -> FudgeRolls {
         Rolls {
             description: dice_request.to_string(),
             rolls: dice.roll(dice_request.number, &dice_request.dice),
@@ -159,19 +159,9 @@ impl FudgeRolls {
 mod tests {
     use crate::dice::*;
 
-    // TODO if test passes, that's because of how rust work so the test should be deleted!
-    #[test]
-    fn dice_kind_comparison() {
-        assert_eq!(NumericDice::ConstDice(10), NumericDice::ConstDice(10));
-        assert_ne!(NumericDice::ConstDice(10), NumericDice::ConstDice(20));
-        assert_eq!(NumericDice::NumberedDice(10), NumericDice::NumberedDice(10));
-        assert_ne!(NumericDice::NumberedDice(10), NumericDice::NumberedDice(30));
-        assert_ne!(NumericDice::NumberedDice(10), NumericDice::ConstDice(10));
-    }
-
     #[test]
     fn const_generation() {
-        let dice = Dice::new();
+        let dice = DiceGenerator::new();
         let const_value = 42;
         let roll_number = 5;
         let rolls = dice.roll(roll_number, &NumericDice::ConstDice(const_value));
@@ -191,7 +181,7 @@ mod tests {
 
     #[test]
     fn numbered_dice_generation() {
-        let dice = Dice::new();
+        let dice = DiceGenerator::new();
         let dice_sides = 42;
         let roll_number = 5;
         let rolls = dice.roll(roll_number, &NumericDice::NumberedDice(dice_sides));
@@ -207,7 +197,7 @@ mod tests {
 
     #[test]
     fn repeating_dice() {
-        let dice = Dice::new();
+        let dice = DiceGenerator::new();
         let repeating_values = vec![1, 2, 3, 4, 5];
 
         assert_eq!(

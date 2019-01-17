@@ -31,7 +31,7 @@ impl fmt::Display for NumericDice {
                         .map(|val| val.to_string() + ",")
                         .collect::<String>()
                 ),
-                NumericDice::AggregationResult => String::from("TODO"),
+                NumericDice::AggregationResult => String::from("AggregatedValue"),
             }
         )
     }

@@ -6,6 +6,7 @@
 
 use crate::dice::NumericRolls;
 use crate::dice::*;
+use crate::errors::Error;
 use crate::NumericSession;
 use crate::TypedRollSession;
 use core::fmt::Debug;
@@ -83,9 +84,9 @@ impl MultiplyBy<NumericRolls> for NumericRolls {
 /// # Example
 /// ```
 /// # use letsroll::actions::Reroll;
-/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
 /// let input_rolls = vec![5,1,10];
-/// let dice = Dice::new();
+/// let dice = DiceGenerator::new();
 /// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
 /// let rolls = NumericRolls::new(dice_request, &dice);
 /// assert_eq!(rolls.reroll(&dice, &vec![1]).rolls, vec![5,5,10]);
@@ -124,19 +125,19 @@ impl<T: PartialEq + Debug + Display + Copy, V: Clone + Debug> Reroll<T, V> for R
 /// Let's simulate a D20 flipflop:
 /// ```
 /// # use letsroll::actions::FlipFlop;
-/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
 /// let input_rolls = vec![1,15,20];
 /// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
-/// let rolls = NumericRolls::new(dice_request, &Dice::new());
+/// let rolls = NumericRolls::new(dice_request, &DiceGenerator::new());
 /// assert_eq!(rolls.flip().rolls, vec![10,51,2]);
 /// ```
 /// And now a D100 flipflop:
 /// ```
 /// # use letsroll::actions::FlipFlop;
-/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
 /// let input_rolls = vec![1,15,100];
 /// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
-/// let rolls = NumericRolls::new(dice_request, &Dice::new());
+/// let rolls = NumericRolls::new(dice_request, &DiceGenerator::new());
 /// assert_eq!(rolls.flip().rolls, vec![100,510,1]);
 /// ```
 pub trait FlipFlop<T> {
@@ -174,9 +175,9 @@ fn get_digits_number(n: f32) -> usize {
 /// # Example
 /// ```
 /// # use letsroll::actions::Sum;
-/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
 /// let dice_request = NumericRollRequest::new(3, NumericDice::ConstDice(10));
-/// let rolls = NumericRolls::new(dice_request, &Dice::new());
+/// let rolls = NumericRolls::new(dice_request, &DiceGenerator::new());
 /// assert_eq!(rolls.sum().rolls, vec![30]);
 /// ```
 /// # Remark
@@ -205,12 +206,12 @@ impl Sum<NumericRolls> for NumericRolls {
 /// # Example
 /// ```
 /// # use letsroll::actions::Explode;
-/// # use letsroll::dice::{Dice, NumericRolls, NumericDice, NumericRollRequest};
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
 /// let dice_request = NumericRollRequest::new(
 ///     5,
 ///     NumericDice::RepeatingDice(vec![1, 2, 3, 2, 1]),
 /// );
-/// let dice = Dice::new();
+/// let dice = DiceGenerator::new();
 /// let rolls = NumericRolls::new(dice_request, &dice);
 /// let expected = vec![1, 2, 3, 2, 1, 1, 2, 1];
 /// assert_eq!(rolls.explode(&dice, &vec![2, 5]).rolls, expected);
@@ -320,12 +321,47 @@ impl<T: Debug + Eq + Hash + Display, V: Debug + Clone> CountValues for TypedRoll
             })
             .collect();
         NumericSession {
-            dice: Dice::new(),
+            dice: DiceGenerator::new(),
             rolls: rolls,
         }
     }
 }
 
+impl NumericRolls {
+    pub fn apply(&self, action: &Action, dice: &DiceGenerator) -> Result<NumericRolls, Error> {
+        match action {
+            Action::Sum => Ok(self.sum()),
+            Action::MultiplyBy(factor) => Ok(self.multiply(*factor)),
+            Action::Explode(explosion_value) => Ok(self.explode(dice, &explosion_value)),
+            Action::FlipFlop => Ok(self.flip()),
+            Action::RerollNumeric(values_to_reroll) => Ok(self.reroll(dice, &values_to_reroll)),
+            Action::RerollFudge(_) | Action::ExplodeFudge(_) | Action::Total => {
+                return Err(Error::incompatible(
+                    &action.to_string(),
+                    &String::from("numeric roll"),
+                ));
+            }
+        }
+    }
+}
+
+impl FudgeRolls {
+    pub fn apply(&self, action: &Action, dice: &DiceGenerator) -> Result<FudgeRolls, Error> {
+        match action {
+            Action::ExplodeFudge(explosion_value) => Ok(self.explode(dice, &explosion_value)),
+            Action::RerollFudge(values_to_reroll) => Ok(self.reroll(dice, &values_to_reroll)),
+            Action::Sum
+            | Action::Total
+            | Action::MultiplyBy(_)
+            | Action::FlipFlop
+            | Action::RerollNumeric(_)
+            | Action::Explode(_) => Err(Error::incompatible(
+                &action.to_string(),
+                &String::from("fudge roll"),
+            )),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use crate::actions::*;
@@ -342,7 +378,7 @@ mod tests {
         let expected = &input.clone();
         let rolls_result = NumericRolls::new(
             RollRequest::new(5, NumericDice::RepeatingDice(input)),
-            &Dice::new(),
+            &DiceGenerator::new(),
         );
         let output = rolls_result.multiply(factor);
         assert_eq!(output.rolls.len(), expected.len());
@@ -356,7 +392,7 @@ mod tests {
         let input = NUM_INPUT.to_vec();
         let dice_request =
             NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
-        let rolls = NumericRolls::new(dice_request, &Dice::new());
+        let rolls = NumericRolls::new(dice_request, &DiceGenerator::new());
         let output = rolls.flip();
         let expected = vec![100, 100, 100, 510, 1];
         assert_eq!(output.rolls, expected);
@@ -367,7 +403,7 @@ mod tests {
         let input = NUM_INPUT.to_vec();
         let dice_request =
             NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
-        let rolls = NumericRolls::new(dice_request, &Dice::new());
+        let rolls = NumericRolls::new(dice_request, &DiceGenerator::new());
         let output = rolls.sum();
         let expected = vec![118];
         assert_eq!(output.rolls, expected);
@@ -378,7 +414,7 @@ mod tests {
         let input = NUM_INPUT.to_vec();
         let dice_request =
             NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
-        let dice = Dice::new();
+        let dice = DiceGenerator::new();
         let rolls = NumericRolls::new(dice_request, &dice);
         let output = rolls.reroll(&dice, &vec![100]);
         let expected = vec![1, 1, 1, 15, 1];
@@ -390,7 +426,7 @@ mod tests {
         let input = vec![FudgeRoll::Blank, FudgeRoll::Plus, FudgeRoll::Minus];
         let dice_request =
             FudgeRollRequest::new(input.len() as DiceNumber, FudgeDice::RepeatingDice(input));
-        let dice = Dice::new();
+        let dice = DiceGenerator::new();
         let rolls = FudgeRolls::new(dice_request, &dice);
         let output = rolls.reroll(&dice, &vec![FudgeRoll::Minus]);
         let expected = vec![FudgeRoll::Blank, FudgeRoll::Plus, FudgeRoll::Blank];
@@ -402,7 +438,7 @@ mod tests {
         let input = vec![1, 2, 3, 2, 1];
         let dice_request =
             NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
-        let dice = Dice::new();
+        let dice = DiceGenerator::new();
         let rolls = NumericRolls::new(dice_request, &dice);
         let output = rolls.explode(&dice, &vec![2, 3]);
         let expected = vec![1, 2, 3, 2, 1, 1, 2, 3, 1, 2, 1];
@@ -411,7 +447,7 @@ mod tests {
 
     #[test]
     fn transform_total_sum() {
-        let dice = Dice::new();
+        let dice = DiceGenerator::new();
         let rolls: Vec<NumericRolls> = (1..=5)
             .map(|i| {
                 let dice_request =

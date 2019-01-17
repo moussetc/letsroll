@@ -2,7 +2,10 @@ use crate::actions::Action;
 use crate::actions::Aggregation;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
+use crate::FudgeRollAndActionRequest;
 use crate::MultiTypeSession;
+use crate::NumericRollAndActionRequest;
+use crate::RollAndActionsRequest;
 use crate::{AggregatableSession, FudgeSession, NumericSession, Session};
 use std::str::FromStr;
 
@@ -60,48 +63,72 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
     match RequestParser::parse(Rule::roll_request, s) {
         Err(err) => Err(Error::from(err)),
         Ok(mut parsed_roll_request) => {
-            let mut num_request_dice: Vec<NumericRollRequest> = vec![];
-            let mut fudge_request_dice: Vec<FudgeRollRequest> = vec![];
+            let mut num_request_dice: Vec<NumericRollAndActionRequest> = vec![];
+            let mut fudge_request_dice: Vec<FudgeRollAndActionRequest> = vec![];
             let mut aggregation: Option<Aggregation> = None;
             let mut actions: Vec<Action> = vec![];
             for dice_or_action in parsed_roll_request.next().unwrap().into_inner() {
                 match dice_or_action.as_rule() {
                     Rule::dice => {
                         for dice in dice_or_action.into_inner() {
-                            match dice.as_rule() {
-                                Rule::fudge_dice => {
-                                    fudge_request_dice.push(parse_fudge_dice(dice)?);
+                            let parsed_dice = parse_dice(dice)?;
+                            match parsed_dice.0 {
+                                Some(dice) => {
+                                    num_request_dice.push(RollAndActionsRequest::new(dice, vec![]))
                                 }
-                                Rule::num_const_dice => {
-                                    num_request_dice.push(parse_const_numeric_dice(dice)?)
+                                _ => (),
+                            };
+                            match parsed_dice.1 {
+                                Some(dice) => fudge_request_dice
+                                    .push(RollAndActionsRequest::new(dice, vec![])),
+                                _ => (),
+                            };
+                        }
+                    }
+                    Rule::dice_and_action => {
+                        let mut dice: Option<(
+                            Option<NumericRollRequest>,
+                            Option<FudgeRollRequest>,
+                        )> = None;
+                        let mut dice_actions: Vec<Action> = vec![];
+                        for dice_or_dice_action in dice_or_action.into_inner() {
+                            match dice_or_dice_action.as_rule() {
+                                Rule::dice => {
+                                    dice = Some(parse_dice(
+                                        dice_or_dice_action.into_inner().next().unwrap(),
+                                    )?);
                                 }
-                                Rule::numbered_dice => {
-                                    num_request_dice.push(parse_numbered_dice(dice)?);
+                                Rule::action => {
+                                    parse_action(
+                                        dice_or_dice_action.into_inner().next().unwrap(),
+                                        &mut dice_actions,
+                                    )?;
                                 }
                                 _ => unreachable!(),
                             }
                         }
+                        match &dice.as_ref().unwrap().0 {
+                            Some(num_dice) => {
+                                num_request_dice.push(NumericRollAndActionRequest::new(
+                                    num_dice.clone(),
+                                    dice_actions.clone(),
+                                ));
+                            }
+                            _ => (),
+                        };
+                        match &dice.as_ref().unwrap().1 {
+                            Some(fudge_dice) => {
+                                fudge_request_dice.push(FudgeRollAndActionRequest::new(
+                                    fudge_dice.clone(),
+                                    dice_actions.clone(),
+                                ));
+                            }
+                            _ => (),
+                        };
                     }
                     Rule::action => {
                         for action in dice_or_action.into_inner() {
-                            match action.as_rule() {
-                                // TODO "Sum" after the dice is "total sum" which has to be implemented
-                                Rule::action_sum => actions.push(Action::Total),
-                                Rule::action_flip => actions.push(Action::FlipFlop),
-                                Rule::action_total => actions.push(Action::Total),
-
-                                Rule::action_mult => {
-                                    actions.push(parse_multiply_action(action)?);
-                                }
-                                Rule::action_reroll => {
-                                    actions.push(parse_reroll_action(action)?);
-                                }
-                                Rule::action_explode => {
-                                    actions.push(parse_explode_action(action)?);
-                                }
-                                // TODO : add other actions
-                                _ => unreachable!(),
-                            }
+                            parse_action(action, &mut actions)?;
                         }
                     }
                     Rule::aggregation => {
@@ -125,7 +152,7 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
             };
 
             if num_request_dice.len() > 0 {
-                let mut session = NumericSession::new(num_request_dice);
+                let mut session = NumericSession::build_with_actions(num_request_dice)?;
                 for action in actions.iter() {
                     session.add_step(action.clone())?;
                 }
@@ -137,7 +164,7 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                 res.numeric_session = Some(session);
             }
             if fudge_request_dice.len() > 0 {
-                let mut session = FudgeSession::new(fudge_request_dice);
+                let mut session = FudgeSession::build_with_actions(fudge_request_dice)?;
                 for action in actions.iter() {
                     session.add_step(action.clone())?;
                 }
@@ -145,8 +172,6 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                     let mut num_session = session.aggregate(&aggregation.unwrap());
                     let res_mut = &mut res;
                     if res_mut.numeric_session.is_some() {
-                        // TODO somehow merge the two numeric sessions
-                        // unimplemented!();
                         res_mut
                             .numeric_session
                             .as_mut()
@@ -163,6 +188,17 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
 
             Ok(res)
         }
+    }
+}
+
+fn parse_dice(
+    dice: pest::iterators::Pair<'_, Rule>,
+) -> Result<(Option<NumericRollRequest>, Option<FudgeRollRequest>), Error> {
+    match dice.as_rule() {
+        Rule::fudge_dice => Ok((None, Some(parse_fudge_dice(dice)?))),
+        Rule::num_const_dice => Ok((Some(parse_const_numeric_dice(dice)?), None)),
+        Rule::numbered_dice => Ok((Some(parse_numbered_dice(dice)?), None)),
+        _ => unreachable!(),
     }
 }
 
@@ -211,6 +247,29 @@ fn parse_fudge_dice(dice: pest::iterators::Pair<'_, Rule>) -> Result<FudgeRollRe
         }
     }
     Ok(RollRequest::new(dice_number, FudgeDice::FudgeDice))
+}
+
+fn parse_action(
+    action: pest::iterators::Pair<'_, Rule>,
+    actions: &mut Vec<Action>,
+) -> Result<(), Error> {
+    match action.as_rule() {
+        Rule::action_sum => actions.push(Action::Total),
+        Rule::action_flip => actions.push(Action::FlipFlop),
+        Rule::action_total => actions.push(Action::Total),
+
+        Rule::action_mult => {
+            actions.push(parse_multiply_action(action)?);
+        }
+        Rule::action_reroll => {
+            actions.push(parse_reroll_action(action)?);
+        }
+        Rule::action_explode => {
+            actions.push(parse_explode_action(action)?);
+        }
+        _ => unreachable!(),
+    };
+    Ok(())
 }
 
 fn parse_reroll_action(action: pest::iterators::Pair<'_, Rule>) -> Result<Action, Error> {
