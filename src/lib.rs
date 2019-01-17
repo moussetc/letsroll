@@ -93,9 +93,7 @@ impl<T: Clone + Debug + Display, V: Debug + Clone + Display> TypedRollSession<T,
     }
 }
 
-pub trait Session: Debug {
-    fn to_string(&self) -> String;
-
+pub trait Session: Debug + ToString {
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error>;
 
     fn write_results_to_file(&self, filepath: &str) -> std::io::Result<()> {
@@ -107,13 +105,6 @@ pub trait Session: Debug {
 }
 
 impl Session for NumericSession {
-    fn to_string(&self) -> String {
-        self.rolls
-            .iter()
-            .map(|roll| roll.to_string())
-            .collect::<Vec<String>>()
-            .join("\n")
-    }
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
         match action {
             Action::Total => self.rolls = vec![self.rolls.total()],
@@ -128,14 +119,6 @@ impl Session for NumericSession {
 }
 
 impl Session for FudgeSession {
-    fn to_string(&self) -> String {
-        self.rolls
-            .iter()
-            .map(|roll| roll.to_string())
-            .collect::<Vec<String>>()
-            .join("\n")
-    }
-
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
         for rolls in self.rolls.iter_mut() {
             *rolls = rolls.apply(&action, &self.dice)?;
@@ -172,19 +155,6 @@ pub struct MultiTypeSession {
 }
 
 impl Session for MultiTypeSession {
-    fn to_string(&self) -> String {
-        let mut subresults: Vec<String> = vec![];
-        match &self.numeric_session {
-            Some(session) => subresults.push(session.to_string()),
-            None => (),
-        };
-        match &self.fudge_session {
-            Some(session) => subresults.push(session.to_string()),
-            None => (),
-        };
-        subresults.join("\n")
-    }
-
     fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
         match &mut self.numeric_session {
             Some(ref mut session) => session.add_step(action.clone())?,

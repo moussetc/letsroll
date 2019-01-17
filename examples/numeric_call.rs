@@ -1,5 +1,5 @@
 use letsroll::dice::{NumericDice, RollRequest};
-use letsroll::{NumericSession, Session};
+use letsroll::NumericSession;
 
 fn main() {
     let dice_request = vec![

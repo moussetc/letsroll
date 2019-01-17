@@ -1,5 +1,5 @@
 use letsroll::dice::{FudgeDice, RollRequest};
-use letsroll::{FudgeSession, Session};
+use letsroll::FudgeSession;
 
 fn main() {
     let dice_request = vec![RollRequest::new(4, FudgeDice::FudgeDice)];

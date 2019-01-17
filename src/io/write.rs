@@ -1,4 +1,6 @@
 use crate::dice::*;
+use crate::MultiTypeSession;
+use crate::TypedRollSession;
 use core::fmt::Debug;
 use std::fmt::{self, Display};
 
@@ -75,6 +77,31 @@ impl<T: Display + Debug, V: Clone + Debug> fmt::Display for Rolls<T, V> {
                 .collect::<Vec<String>>()
                 .join(" ")
         )
+    }
+}
+
+impl<T: Clone + Debug + Display, V: Debug + Clone + Display> ToString for TypedRollSession<T, V> {
+    fn to_string(&self) -> String {
+        self.rolls
+            .iter()
+            .map(|roll| roll.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+}
+
+impl ToString for MultiTypeSession {
+    fn to_string(&self) -> String {
+        let mut subresults: Vec<String> = vec![];
+        match &self.numeric_session {
+            Some(session) => subresults.push(session.to_string()),
+            None => (),
+        };
+        match &self.fudge_session {
+            Some(session) => subresults.push(session.to_string()),
+            None => (),
+        };
+        subresults.join("\n")
     }
 }
 
