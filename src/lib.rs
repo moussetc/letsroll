@@ -12,6 +12,7 @@ use crate::actions::*;
 use crate::dice::*;
 use crate::errors::Error;
 use core::fmt::Debug;
+use core::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
@@ -35,21 +36,14 @@ impl<T: Clone> RollAndActionsRequest<T> {
     }
 }
 
-impl FudgeRollAndActionRequest {
-    pub fn roll(self, dice: &DiceGenerator) -> Result<FudgeRolls, Error> {
-        let mut rolls = FudgeRolls::new(self.roll_request, dice);
+impl<V: Debug + Clone + Display> RollAndActionsRequest<V> {
+    pub fn roll<T: Clone + Debug + Display>(self, dice: &Roll<T, V>) -> Result<Rolls<T, V>, Error>
+    where
+        Rolls<T, V>: Apply<T, V>,
+    {
+        let mut rolls = Rolls::<T, V>::new(self.roll_request, dice);
         for action in self.actions.iter() {
-            rolls = rolls.apply(action, dice)?;
-        }
-        Ok(rolls)
-    }
-}
-
-impl NumericRollAndActionRequest {
-    pub fn roll(self, dice: &DiceGenerator) -> Result<NumericRolls, Error> {
-        let mut rolls = NumericRolls::new(self.roll_request, dice);
-        for action in self.actions.iter() {
-            rolls = rolls.apply(action, dice)?;
+            rolls = Apply::<T, V>::apply(&rolls, action, dice)?;
         }
         Ok(rolls)
     }
@@ -64,50 +58,31 @@ pub struct TypedRollSession<T: Debug, V: Debug + Clone> {
 pub type NumericSession = TypedRollSession<NumericRoll, NumericDice>;
 pub type FudgeSession = TypedRollSession<FudgeRoll, FudgeDice>;
 
-impl NumericSession {
-    pub fn build(dice_requests: Vec<NumericRollRequest>) -> NumericSession {
-        NumericSession::build_with_actions(
+impl<T: Clone + Debug + Display, V: Debug + Clone + Display> TypedRollSession<T, V> {
+    pub fn build(dice_requests: Vec<RollRequest<V>>) -> TypedRollSession<T, V>
+    where
+        Rolls<T, V>: Apply<T, V>,
+        dice::DiceGenerator: dice::Roll<T, V>,
+    {
+        TypedRollSession::build_with_actions(
             dice_requests
                 .into_iter()
                 .map(|roll_request| RollAndActionsRequest::new(roll_request, vec![]))
-                .collect::<Vec<NumericRollAndActionRequest>>(),
+                .collect::<Vec<RollAndActionsRequest<V>>>(),
         )
         // TODO for now, without action, there's no reason for it to fail. But who can know what the future holds?
         .expect("How did this happen to us?")
     }
 
     pub fn build_with_actions(
-        requests: Vec<NumericRollAndActionRequest>,
-    ) -> Result<NumericSession, Error> {
+        requests: Vec<RollAndActionsRequest<V>>,
+    ) -> Result<TypedRollSession<T, V>, Error>
+    where
+        Rolls<T, V>: Apply<T, V>,
+        dice::DiceGenerator: dice::Roll<T, V>,
+    {
         let dice = DiceGenerator::new();
-        let rolls: Result<Vec<NumericRolls>, Error> = requests
-            .into_iter()
-            .map(|dice_request| dice_request.roll(&dice))
-            .collect();
-        Ok(TypedRollSession {
-            rolls: rolls?,
-            dice,
-        })
-    }
-}
-
-impl FudgeSession {
-    pub fn build(dice_requests: Vec<FudgeRollRequest>) -> FudgeSession {
-        let dice = DiceGenerator::new();
-        TypedRollSession {
-            rolls: dice_requests
-                .into_iter()
-                .map(|dice_request| FudgeRolls::new(dice_request, &dice))
-                .collect(),
-            dice,
-        }
-    }
-
-    pub fn build_with_actions(
-        requests: Vec<FudgeRollAndActionRequest>,
-    ) -> Result<FudgeSession, Error> {
-        let dice = DiceGenerator::new();
-        let rolls: Result<Vec<FudgeRolls>, Error> = requests
+        let rolls: Result<Vec<Rolls<T, V>>, Error> = requests
             .into_iter()
             .map(|dice_request| dice_request.roll(&dice))
             .collect();

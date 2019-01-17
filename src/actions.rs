@@ -327,8 +327,16 @@ impl<T: Debug + Eq + Hash + Display, V: Debug + Clone> CountValues for TypedRoll
     }
 }
 
-impl NumericRolls {
-    pub fn apply(&self, action: &Action, dice: &DiceGenerator) -> Result<NumericRolls, Error> {
+pub trait Apply<T: Debug, V: Debug + Clone + Display> {
+    fn apply(&self, action: &Action, dice: &Roll<T, V>) -> Result<Rolls<T, V>, Error>;
+}
+
+impl Apply<NumericRoll, NumericDice> for NumericRolls {
+    fn apply(
+        &self,
+        action: &Action,
+        dice: &Roll<NumericRoll, NumericDice>,
+    ) -> Result<NumericRolls, Error> {
         match action {
             Action::Sum => Ok(self.sum()),
             Action::MultiplyBy(factor) => Ok(self.multiply(*factor)),
@@ -345,8 +353,12 @@ impl NumericRolls {
     }
 }
 
-impl FudgeRolls {
-    pub fn apply(&self, action: &Action, dice: &DiceGenerator) -> Result<FudgeRolls, Error> {
+impl Apply<FudgeRoll, FudgeDice> for FudgeRolls {
+    fn apply(
+        &self,
+        action: &Action,
+        dice: &Roll<FudgeRoll, FudgeDice>,
+    ) -> Result<FudgeRolls, Error> {
         match action {
             Action::ExplodeFudge(explosion_value) => Ok(self.explode(dice, &explosion_value)),
             Action::RerollFudge(values_to_reroll) => Ok(self.reroll(dice, &values_to_reroll)),
