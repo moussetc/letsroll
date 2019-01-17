@@ -1,4 +1,5 @@
 use core::fmt::Debug;
+use core::fmt::Display;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cell::RefCell;
@@ -131,29 +132,18 @@ pub struct Rolls<T: Debug, V: Debug + Clone> {
     pub rolls: Vec<T>,
 }
 
+impl<T: Debug, V: Debug + Clone + Display> Rolls<T, V> {
+    pub fn new(dice_request: RollRequest<V>, dice: &Roll<T, V>) -> Rolls<T, V> {
+        Rolls {
+            description: dice_request.to_string(),
+            rolls: dice.roll(dice_request.number, &dice_request.dice),
+            dice_request,
+        }
+    }
+}
+
 pub type NumericRolls = Rolls<NumericRoll, NumericDice>;
-
-impl NumericRolls {
-    pub fn new(dice_request: NumericRollRequest, dice: &DiceGenerator) -> NumericRolls {
-        Rolls {
-            description: dice_request.to_string(),
-            rolls: dice.roll(dice_request.number, &dice_request.dice),
-            dice_request,
-        }
-    }
-}
-
 pub type FudgeRolls = Rolls<FudgeRoll, FudgeDice>;
-
-impl FudgeRolls {
-    pub fn new(dice_request: FudgeRollRequest, dice: &DiceGenerator) -> FudgeRolls {
-        Rolls {
-            description: dice_request.to_string(),
-            rolls: dice.roll(dice_request.number, &dice_request.dice),
-            dice_request,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
