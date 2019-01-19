@@ -2,7 +2,6 @@
 extern crate serde_derive;
 extern crate docopt;
 use docopt::Docopt;
-use letsroll::Session;
 
 use letsroll::errors::Error;
 
@@ -67,13 +66,13 @@ fn run(args: Args) -> Result<(), Error> {
                 },
                 _ => Ok(()),
             }
-            }
         }
+    }
 }
 
 fn write_to_file(content: &String, filepath: &str) -> std::io::Result<()> {
-        let path = Path::new(filepath);
+    let path = Path::new(filepath);
 
-        let mut file = File::create(&path)?;
-        file.write_all(content.to_string().as_bytes())
-    }
+    let mut file = File::create(&path)?;
+    file.write_all(content.to_string().as_bytes())
+}

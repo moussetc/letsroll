@@ -13,11 +13,7 @@ use crate::dice::*;
 use crate::errors::Error;
 use core::fmt::Debug;
 use core::fmt::Display;
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
 
-/// TODO rename the damn struct when brain is working again
 #[derive(Debug)]
 pub struct RollAndActionsRequest<T: Clone> {
     roll_request: RollRequest<T>,
@@ -28,11 +24,24 @@ pub type NumericRollAndActionRequest = RollAndActionsRequest<NumericDice>;
 pub type FudgeRollAndActionRequest = RollAndActionsRequest<FudgeDice>;
 
 impl<T: Clone> RollAndActionsRequest<T> {
-    pub fn new(roll_request: RollRequest<T>, actions: Vec<Action>) -> RollAndActionsRequest<T> {
+    pub fn new(roll_request: RollRequest<T>) -> RollAndActionsRequest<T> {
         RollAndActionsRequest {
             roll_request,
-            actions,
+            actions: vec![],
         }
+    }
+
+    pub fn add_action(mut self, action: Action) -> RollAndActionsRequest<T> {
+        self.actions.push(action);
+        self
+    }
+
+    pub fn add_actions(self, actions: Vec<Action>) -> RollAndActionsRequest<T> {
+        let mut self_mut = self;
+        for action in actions.into_iter() {
+            self_mut = self_mut.add_action(action);
+        }
+        self_mut
     }
 }
 
@@ -67,7 +76,7 @@ impl<T: Clone + Debug + Display, V: Debug + Clone + Display> TypedRollSession<T,
         TypedRollSession::build_with_actions(
             dice_requests
                 .into_iter()
-                .map(|roll_request| RollAndActionsRequest::new(roll_request, vec![]))
+                .map(|roll_request| RollAndActionsRequest::new(roll_request))
                 .collect::<Vec<RollAndActionsRequest<V>>>(),
         )
         // TODO for now, without action, there's no reason for it to fail. But who can know what the future holds?
@@ -93,19 +102,18 @@ impl<T: Clone + Debug + Display, V: Debug + Clone + Display> TypedRollSession<T,
     }
 }
 
-pub trait Session: Debug + ToString {
-    fn add_step(&mut self, action: actions::Action) -> Result<(), Error>;
+pub trait Session: Debug + ToString + Sized {
+    fn add_action(&mut self, action: actions::Action) -> Result<(), Error>;
 
-    fn write_results_to_file(&self, filepath: &str) -> std::io::Result<()> {
-        let path = Path::new(filepath);
-
-        let mut file = File::create(&path)?;
-        file.write_all(self.to_string().as_bytes())
+    fn add_actions(&mut self, actions: Vec<Action>) -> Result<(), Error> {
+        for action in actions.into_iter() {
+            self.add_action(action)?;
+        }
+        Ok(())
     }
 }
-
 impl Session for NumericSession {
-    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+    fn add_action(&mut self, action: actions::Action) -> Result<(), Error> {
         match action {
             Action::Total => self.rolls = vec![self.rolls.total()],
             _ => {
@@ -119,7 +127,7 @@ impl Session for NumericSession {
 }
 
 impl Session for FudgeSession {
-    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+    fn add_action(&mut self, action: actions::Action) -> Result<(), Error> {
         for rolls in self.rolls.iter_mut() {
             *rolls = rolls.apply(&action, &self.dice)?;
         }
@@ -155,13 +163,13 @@ pub struct MultiTypeSession {
 }
 
 impl Session for MultiTypeSession {
-    fn add_step(&mut self, action: actions::Action) -> Result<(), Error> {
+    fn add_action(&mut self, action: actions::Action) -> Result<(), Error> {
         match &mut self.numeric_session {
-            Some(ref mut session) => session.add_step(action.clone())?,
+            Some(ref mut session) => session.add_action(action.clone())?,
             None => (),
         };
         match &mut self.fudge_session {
-            Some(ref mut session) => session.add_step(action.clone())?,
+            Some(ref mut session) => session.add_action(action.clone())?,
             None => (),
         };
         Ok(())
@@ -242,7 +250,7 @@ mod tests {
     //     let dice_requests_len = dice_requests.len();
 
     //     let mut request = crate::RollRequest::new(dice_requests);
-    //     assert_eq!(Ok(()), request.add_step(action));
+    //     assert_eq!(Ok(()), request.add_action(action));
     //     let output = request.dice_rolls;
 
     //     assert_eq!(output.len(), dice_requests_len);

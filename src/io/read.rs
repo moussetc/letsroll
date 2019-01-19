@@ -74,13 +74,14 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                             let parsed_dice = parse_dice(dice)?;
                             match parsed_dice.0 {
                                 Some(dice) => {
-                                    num_request_dice.push(RollAndActionsRequest::new(dice, vec![]))
+                                    num_request_dice.push(RollAndActionsRequest::new(dice))
                                 }
                                 _ => (),
                             };
                             match parsed_dice.1 {
-                                Some(dice) => fudge_request_dice
-                                    .push(RollAndActionsRequest::new(dice, vec![])),
+                                Some(dice) => {
+                                    fudge_request_dice.push(RollAndActionsRequest::new(dice))
+                                }
                                 _ => (),
                             };
                         }
@@ -109,19 +110,20 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                         }
                         match &dice.as_ref().unwrap().0 {
                             Some(num_dice) => {
-                                num_request_dice.push(NumericRollAndActionRequest::new(
-                                    num_dice.clone(),
-                                    dice_actions.clone(),
-                                ));
+                                num_request_dice.push(
+                                    NumericRollAndActionRequest::new(num_dice.clone())
+                                        .add_actions(dice_actions),
+                                );
+                                continue;
                             }
                             _ => (),
                         };
                         match &dice.as_ref().unwrap().1 {
                             Some(fudge_dice) => {
-                                fudge_request_dice.push(FudgeRollAndActionRequest::new(
-                                    fudge_dice.clone(),
-                                    dice_actions.clone(),
-                                ));
+                                fudge_request_dice.push(
+                                    FudgeRollAndActionRequest::new(fudge_dice.clone())
+                                        .add_actions(dice_actions),
+                                );
                             }
                             _ => (),
                         };
@@ -153,21 +155,17 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
 
             if num_request_dice.len() > 0 {
                 let mut session = NumericSession::build_with_actions(num_request_dice)?;
-                for action in actions.iter() {
-                    session.add_step(action.clone())?;
-                }
+                session.add_actions(actions.clone())?;
                 if aggregation.is_some() {
                     session = session.aggregate(&aggregation.unwrap());
                 } else if default_total && aggregation.is_none() && actions.len() == 0 {
-                    session.add_step(Action::Total)?;
+                    session.add_action(Action::Total)?;
                 }
                 res.numeric_session = Some(session);
             }
             if fudge_request_dice.len() > 0 {
                 let mut session = FudgeSession::build_with_actions(fudge_request_dice)?;
-                for action in actions.iter() {
-                    session.add_step(action.clone())?;
-                }
+                session.add_actions(actions)?;
                 if aggregation.is_some() {
                     let mut num_session = session.aggregate(&aggregation.unwrap());
                     let res_mut = &mut res;
