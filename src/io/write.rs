@@ -1,7 +1,6 @@
 use crate::dice::*;
 use crate::MultiTypeSession;
 use crate::TypedRollSession;
-use core::fmt::Debug;
 use std::fmt::{self, Display};
 
 impl Display for FudgeRoll {
@@ -59,13 +58,13 @@ impl fmt::Display for FudgeDice {
     }
 }
 
-impl<T: Display + Clone> fmt::Display for RollRequest<T> {
+impl<T: DiceBounds> fmt::Display for RollRequest<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", self.number, self.dice.to_string())
     }
 }
 
-impl<T: Display + Debug, V: Clone + Debug> fmt::Display for Rolls<T, V> {
+impl<T: RollBounds, V: DiceBounds> fmt::Display for Rolls<T, V> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -80,7 +79,7 @@ impl<T: Display + Debug, V: Clone + Debug> fmt::Display for Rolls<T, V> {
     }
 }
 
-impl<T: Clone + Debug + Display, V: Debug + Clone + Display> ToString for TypedRollSession<T, V> {
+impl<T: RollBounds, V: DiceBounds> ToString for TypedRollSession<T, V> {
     fn to_string(&self) -> String {
         self.rolls
             .iter()

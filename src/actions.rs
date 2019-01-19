@@ -9,11 +9,8 @@ use crate::dice::*;
 use crate::errors::Error;
 use crate::NumericSession;
 use crate::TypedRollSession;
-use core::fmt::Debug;
-use core::fmt::Display;
 use std::collections::HashMap;
 use std::fmt;
-use std::hash::Hash;
 
 /// Enumeration of all possible actions
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -91,10 +88,10 @@ impl MultiplyBy<NumericRolls> for NumericRolls {
 /// let rolls = NumericRolls::new(dice_request, &dice);
 /// assert_eq!(rolls.reroll(&dice, &vec![1]).rolls, vec![5,5,10]);
 /// ```
-pub trait Reroll<T: Debug, V: Clone + Debug> {
+pub trait Reroll<T: RollBounds, V: DiceBounds> {
     fn reroll(&self, dice: &Roll<T, V>, t: &Vec<T>) -> Rolls<T, V>;
 }
-impl<T: PartialEq + Debug + Display + Copy, V: Clone + Debug> Reroll<T, V> for Rolls<T, V> {
+impl<T: RollBounds, V: DiceBounds> Reroll<T, V> for Rolls<T, V> {
     // TODO should the new roll be suject to the same action ?
     fn reroll(&self, dice: &Roll<T, V>, t: &Vec<T>) -> Rolls<T, V> {
         let mut new_rolls: Vec<T> = vec![];
@@ -218,11 +215,11 @@ impl Sum<NumericRolls> for NumericRolls {
 /// ```
 /// # Warning
 /// Don't use on a [ConstDice](../dice/struct.ConstDice.html) result with the same ConstDice for rerolls: it would end in stack overflow since the highest value=only value will always be rerolled
-pub trait Explode<T: Debug, V: Debug + Clone> {
+pub trait Explode<T: RollBounds, V: DiceBounds> {
     fn explode(&self, dice: &Roll<T, V>, explosion_values: &Vec<T>) -> Rolls<T, V>;
 }
 
-impl<T: Debug + Display + PartialEq + Clone, V: Debug + Clone> Explode<T, V> for Rolls<T, V> {
+impl<T: RollBounds, V: DiceBounds> Explode<T, V> for Rolls<T, V> {
     fn explode(&self, dice: &Roll<T, V>, explosion_values: &Vec<T>) -> Rolls<T, V> {
         Rolls {
             description: format!(
@@ -240,7 +237,7 @@ impl<T: Debug + Display + PartialEq + Clone, V: Debug + Clone> Explode<T, V> for
     }
 }
 
-fn explode<T: Clone + PartialEq, V>(
+fn explode<T: RollBounds, V: DiceBounds>(
     rolls: &Vec<T>,
     dice: &Roll<T, V>,
     dicekind: &V,
@@ -303,7 +300,7 @@ pub trait CountValues {
     fn count(&self) -> NumericSession;
 }
 
-impl<T: Debug + Eq + Hash + Display, V: Debug + Clone> CountValues for TypedRollSession<T, V> {
+impl<T: RollBounds, V: DiceBounds> CountValues for TypedRollSession<T, V> {
     fn count(&self) -> NumericSession {
         let mut set: HashMap<&T, NumericRoll> = HashMap::new();
         let all_rolls = self.rolls.iter().map(|rolls| &rolls.rolls).flatten();
@@ -327,7 +324,7 @@ impl<T: Debug + Eq + Hash + Display, V: Debug + Clone> CountValues for TypedRoll
     }
 }
 
-pub trait Apply<T: Debug, V: Debug + Clone + Display> {
+pub trait Apply<T: RollBounds, V: DiceBounds> {
     fn apply(&self, action: &Action, dice: &Roll<T, V>) -> Result<Rolls<T, V>, Error>;
 }
 

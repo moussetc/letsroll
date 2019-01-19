@@ -1,5 +1,6 @@
 use core::fmt::Debug;
 use core::fmt::Display;
+use core::hash::Hash;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cell::RefCell;
@@ -14,6 +15,10 @@ pub enum FudgeRoll {
     Minus,
     Blank,
 }
+
+pub trait RollBounds: Sized + Debug + Display + Clone + Copy + Hash + Eq {}
+impl RollBounds for NumericRoll {}
+impl RollBounds for FudgeRoll {}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum NumericDice {
@@ -43,12 +48,20 @@ pub enum FudgeDice {
     RepeatingDice(Vec<FudgeRoll>),
 }
 
+pub trait DiceBounds: Sized + Debug + Display + Clone {}
+impl DiceBounds for NumericDice {}
+impl DiceBounds for FudgeDice {}
+
 #[derive(Debug)]
 pub struct DiceGenerator {
     rng_ref: RefCell<ThreadRng>,
 }
 
-pub trait Roll<T, V> {
+pub trait Roll<T, V>
+where
+    T: RollBounds,
+    V: DiceBounds,
+{
     fn roll(&self, n: DiceNumber, dice: &V) -> Vec<T>;
 }
 
@@ -82,7 +95,11 @@ impl DiceGenerator {
         }
     }
 
-    pub fn roll_repeating<T: Clone>(&self, n: DiceNumber, repeating_values: &Vec<T>) -> Vec<T> {
+    pub fn roll_repeating<T: RollBounds>(
+        &self,
+        n: DiceNumber,
+        repeating_values: &Vec<T>,
+    ) -> Vec<T> {
         let mut repeat_values = repeating_values.clone();
         for _ in 0..(n as usize / repeating_values.len()) {
             repeat_values.append(&mut repeating_values.clone());
@@ -90,7 +107,7 @@ impl DiceGenerator {
         repeat_values[0..(n as usize)].to_vec()
     }
 
-    pub fn roll_const_dice<T: Clone>(&self, n: DiceNumber, const_value: &T) -> Vec<T> {
+    pub fn roll_const_dice<T: RollBounds>(&self, n: DiceNumber, const_value: &T) -> Vec<T> {
         (1..n + 1).map(|_| const_value.clone()).collect()
     }
 
@@ -112,27 +129,27 @@ impl DiceGenerator {
 }
 
 #[derive(Debug, Clone)]
-pub struct RollRequest<T: Clone> {
+pub struct RollRequest<T: DiceBounds> {
     pub(crate) number: DiceNumber,
     pub(crate) dice: T,
 }
 pub type NumericRollRequest = RollRequest<NumericDice>;
 pub type FudgeRollRequest = RollRequest<FudgeDice>;
 
-impl<T: Clone> RollRequest<T> {
+impl<T: DiceBounds> RollRequest<T> {
     pub fn new(number: DiceNumber, dice: T) -> RollRequest<T> {
         RollRequest { number, dice }
     }
 }
 
 #[derive(Debug)]
-pub struct Rolls<T: Debug, V: Debug + Clone> {
+pub struct Rolls<T: RollBounds, V: DiceBounds> {
     pub dice_request: RollRequest<V>,
     pub description: String,
     pub rolls: Vec<T>,
 }
 
-impl<T: Debug, V: Debug + Clone + Display> Rolls<T, V> {
+impl<T: RollBounds, V: DiceBounds> Rolls<T, V> {
     pub fn new(dice_request: RollRequest<V>, dice: &Roll<T, V>) -> Rolls<T, V> {
         Rolls {
             description: dice_request.to_string(),

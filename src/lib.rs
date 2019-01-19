@@ -12,10 +12,9 @@ use crate::actions::*;
 use crate::dice::*;
 use crate::errors::Error;
 use core::fmt::Debug;
-use core::fmt::Display;
 
 #[derive(Debug)]
-pub struct RollAndActionsRequest<T: Clone> {
+pub struct RollAndActionsRequest<T: DiceBounds> {
     roll_request: RollRequest<T>,
     pub actions: Vec<Action>,
 }
@@ -23,7 +22,7 @@ pub struct RollAndActionsRequest<T: Clone> {
 pub type NumericRollAndActionRequest = RollAndActionsRequest<NumericDice>;
 pub type FudgeRollAndActionRequest = RollAndActionsRequest<FudgeDice>;
 
-impl<T: Clone> RollAndActionsRequest<T> {
+impl<T: DiceBounds> RollAndActionsRequest<T> {
     pub fn new(roll_request: RollRequest<T>) -> RollAndActionsRequest<T> {
         RollAndActionsRequest {
             roll_request,
@@ -45,8 +44,8 @@ impl<T: Clone> RollAndActionsRequest<T> {
     }
 }
 
-impl<V: Debug + Clone + Display> RollAndActionsRequest<V> {
-    pub fn roll<T: Clone + Debug + Display>(self, dice: &Roll<T, V>) -> Result<Rolls<T, V>, Error>
+impl<V: DiceBounds> RollAndActionsRequest<V> {
+    pub fn roll<T: RollBounds>(self, dice: &Roll<T, V>) -> Result<Rolls<T, V>, Error>
     where
         Rolls<T, V>: Apply<T, V>,
     {
@@ -59,7 +58,7 @@ impl<V: Debug + Clone + Display> RollAndActionsRequest<V> {
 }
 
 #[derive(Debug)]
-pub struct TypedRollSession<T: Debug, V: Debug + Clone> {
+pub struct TypedRollSession<T: RollBounds, V: DiceBounds> {
     pub rolls: Vec<Rolls<T, V>>,
     dice: DiceGenerator,
 }
@@ -67,7 +66,7 @@ pub struct TypedRollSession<T: Debug, V: Debug + Clone> {
 pub type NumericSession = TypedRollSession<NumericRoll, NumericDice>;
 pub type FudgeSession = TypedRollSession<FudgeRoll, FudgeDice>;
 
-impl<T: Clone + Debug + Display, V: Debug + Clone + Display> TypedRollSession<T, V> {
+impl<T: RollBounds, V: DiceBounds> TypedRollSession<T, V> {
     pub fn build(dice_requests: Vec<RollRequest<V>>) -> TypedRollSession<T, V>
     where
         Rolls<T, V>: Apply<T, V>,
