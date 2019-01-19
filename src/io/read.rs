@@ -6,7 +6,7 @@ use crate::FudgeRollAndActionRequest;
 use crate::MultiTypeSession;
 use crate::NumericRollAndActionRequest;
 use crate::RollAndActionsRequest;
-use crate::{AggregatableSession, FudgeSession, NumericSession, Session};
+use crate::{AggregatableSession, FudgeSession, NumericSession, TransformableSession};
 use std::str::FromStr;
 
 use pest::Parser;
@@ -159,7 +159,7 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                 if aggregation.is_some() {
                     session = session.aggregate(&aggregation.unwrap());
                 } else if default_total && aggregation.is_none() && actions.len() == 0 {
-                    session.add_action(Action::Total)?;
+                    session.add_transformation(Action::Total)?;
                 }
                 res.numeric_session = Some(session);
             }

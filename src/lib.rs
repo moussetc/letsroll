@@ -102,18 +102,18 @@ impl<T: Clone + Debug + Display, V: Debug + Clone + Display> TypedRollSession<T,
     }
 }
 
-pub trait Session: Debug + ToString + Sized {
-    fn add_action(&mut self, action: actions::Action) -> Result<(), Error>;
+pub trait TransformableSession: Debug + ToString + Sized {
+    fn add_transformation(&mut self, action: actions::Action) -> Result<(), Error>;
 
     fn add_actions(&mut self, actions: Vec<Action>) -> Result<(), Error> {
         for action in actions.into_iter() {
-            self.add_action(action)?;
+            self.add_transformation(action)?;
         }
         Ok(())
     }
 }
-impl Session for NumericSession {
-    fn add_action(&mut self, action: actions::Action) -> Result<(), Error> {
+impl TransformableSession for NumericSession {
+    fn add_transformation(&mut self, action: actions::Action) -> Result<(), Error> {
         match action {
             Action::Total => self.rolls = vec![self.rolls.total()],
             _ => {
@@ -126,8 +126,8 @@ impl Session for NumericSession {
     }
 }
 
-impl Session for FudgeSession {
-    fn add_action(&mut self, action: actions::Action) -> Result<(), Error> {
+impl TransformableSession for FudgeSession {
+    fn add_transformation(&mut self, action: actions::Action) -> Result<(), Error> {
         for rolls in self.rolls.iter_mut() {
             *rolls = rolls.apply(&action, &self.dice)?;
         }
@@ -162,14 +162,14 @@ pub struct MultiTypeSession {
     fudge_session: Option<FudgeSession>,
 }
 
-impl Session for MultiTypeSession {
-    fn add_action(&mut self, action: actions::Action) -> Result<(), Error> {
+impl TransformableSession for MultiTypeSession {
+    fn add_transformation(&mut self, action: actions::Action) -> Result<(), Error> {
         match &mut self.numeric_session {
-            Some(ref mut session) => session.add_action(action.clone())?,
+            Some(ref mut session) => session.add_transformation(action.clone())?,
             None => (),
         };
         match &mut self.fudge_session {
-            Some(ref mut session) => session.add_action(action.clone())?,
+            Some(ref mut session) => session.add_transformation(action.clone())?,
             None => (),
         };
         Ok(())
