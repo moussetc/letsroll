@@ -500,4 +500,63 @@ mod tests {
             .unwrap();
         assert_eq!(count22.rolls[0], 1);
     }
+
+    #[test]
+    fn request_reroll_numeric() {
+        test_action_implemented_for_types(Action::RerollNumeric(vec![1]), true, false);
+    }
+
+    #[test]
+    fn request_reroll_text() {
+        test_action_implemented_for_types(Action::RerollFudge(vec![FudgeRoll::Blank]), false, true);
+    }
+
+    #[test]
+    fn request_sum() {
+        test_action_implemented_for_types(Action::Sum, true, false);
+    }
+
+    #[test]
+    fn request_multiply_by() {
+        test_action_implemented_for_types(Action::MultiplyBy(42), true, false);
+    }
+
+    #[test]
+    fn request_flipflop() {
+        test_action_implemented_for_types(Action::FlipFlop, true, false);
+    }
+
+    /// Test the compatibility between actions and roll types
+    fn test_action_implemented_for_types(
+        action: Action,
+        test_num_types: bool,
+        test_text_types: bool,
+    ) {
+        let dice_number = 5;
+        let dice_val = 15;
+
+        assert!(
+            test_num_types || test_text_types,
+            "This test function should be called with at least one type enabled"
+        );
+        let dice = DiceGenerator::new();
+        let rolls = RollRequest::new(dice_number, NumericDice::ConstDice(dice_val))
+            .add_action(action.clone())
+            .roll(&dice);
+        assert_eq!(test_num_types, rolls.is_ok());
+        let rolls = RollRequest::new(dice_number, NumericDice::NumberedDice(dice_val))
+            .add_action(action.clone())
+            .roll(&dice);
+        assert_eq!(test_num_types, rolls.is_ok());
+        let rolls = FudgeRollRequest::new(dice_number, FudgeDice::FudgeDice)
+            .add_action(action.clone())
+            .roll(&dice);
+        assert_eq!(test_text_types, rolls.is_ok());
+    }
+
+    // TODO
+    // #[test]
+    // fn request_count_values() {
+    //     test_action_implemented_for_types(Action::CountValues, true, true);
+    // }
 }
