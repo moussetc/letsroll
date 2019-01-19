@@ -71,7 +71,7 @@ impl MultiplyBy<NumericRolls> for NumericRolls {
     fn multiply(&self, factor: NumericRoll) -> NumericRolls {
         Rolls {
             description: format!("({}) x {}", &self.description, factor),
-            dice_request: self.dice_request.clone(),
+            dice: self.dice.clone(),
             rolls: self.rolls.multiply(factor),
         }
     }
@@ -97,7 +97,7 @@ impl<T: RollBounds, V: DiceBounds> Reroll<T, V> for Rolls<T, V> {
         let mut new_rolls: Vec<T> = vec![];
         for roll in self.rolls.iter() {
             if t.contains(roll) {
-                new_rolls.append(&mut dice.roll(1, &self.dice_request.dice));
+                new_rolls.append(&mut dice.roll(1, &self.dice));
             } else {
                 new_rolls.push(*roll);
             }
@@ -111,7 +111,7 @@ impl<T: RollBounds, V: DiceBounds> Reroll<T, V> for Rolls<T, V> {
                     .collect::<Vec<String>>()
                     .join(",")
             ),
-            dice_request: self.dice_request.clone(),
+            dice: self.dice.clone(),
             rolls: new_rolls,
         }
     }
@@ -144,14 +144,13 @@ impl FlipFlop<NumericRolls> for NumericRolls {
     fn flip(&self) -> NumericRolls {
         Rolls {
             description: format!("flip({})", &self.description),
-            dice_request: self.dice_request.clone(),
+            dice: self.dice.clone(),
             rolls: self
                 .rolls
                 .iter()
                 .map(|roll| {
                     // Compute the max padding required for 1 to become 10, 100, etc. according to the dice sides
-                    let max_digits =
-                        get_digits_number(self.dice_request.dice.get_max_value() as f32);
+                    let max_digits = get_digits_number(self.dice.get_max_value() as f32);
                     let result = format!("{:0width$}", roll, width = max_digits)
                         .chars()
                         .rev()
@@ -191,7 +190,7 @@ impl Sum<NumericRolls> for NumericRolls {
     fn sum(&self) -> NumericRolls {
         Rolls {
             description: format!("sum({})", &self.description),
-            dice_request: self.dice_request.clone(),
+            dice: self.dice.clone(),
             rolls: self.rolls.sum(),
         }
     }
@@ -231,8 +230,8 @@ impl<T: RollBounds, V: DiceBounds> Explode<T, V> for Rolls<T, V> {
                     .collect::<Vec<String>>()
                     .join(",")
             ),
-            dice_request: self.dice_request.clone(),
-            rolls: explode(&self.rolls, dice, &self.dice_request.dice, explosion_values),
+            rolls: explode(&self.rolls, dice, &self.dice, explosion_values),
+            dice: self.dice.clone(),
         }
     }
 }
@@ -283,7 +282,7 @@ impl TotalSum for Vec<NumericRolls> {
         };
 
         Rolls {
-            dice_request: RollRequest::new(1, NumericDice::AggregationResult),
+            dice: NumericDice::AggregationResult,
             description,
             rolls: vec![sum],
         }
@@ -314,10 +313,11 @@ impl<T: RollBounds, V: DiceBounds> CountValues for TypedRollSession<T, V> {
             .map(|keyval| Rolls {
                 description: format!("COUNT({})", &keyval.0),
                 rolls: vec![*keyval.1],
-                dice_request: RollRequest::new(1, NumericDice::AggregationResult),
+                dice: NumericDice::AggregationResult,
             })
             .collect();
         NumericSession {
+            requests: vec![], // TODO surely not the correct answer
             dice: DiceGenerator::new(),
             rolls: rolls,
         }
@@ -466,13 +466,12 @@ mod tests {
             .collect();
         let expected = NumericRolls {
             description: String::from(""),
-            dice_request: RollRequest::new(1, NumericDice::AggregationResult),
+            dice: NumericDice::AggregationResult,
             rolls: vec![15],
         };
         let output = rolls.total();
 
-        assert_eq!(output.dice_request.dice, expected.dice_request.dice);
-        assert_eq!(output.dice_request.number, expected.dice_request.number);
+        assert_eq!(output.dice, expected.dice);
         assert_eq!(output.rolls[0], expected.rolls[0]);
     }
 

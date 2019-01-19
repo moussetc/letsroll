@@ -14,51 +14,8 @@ use crate::errors::Error;
 use core::fmt::Debug;
 
 #[derive(Debug)]
-pub struct RollAndActionsRequest<T: DiceBounds> {
-    roll_request: RollRequest<T>,
-    pub actions: Vec<Action>,
-}
-
-pub type NumericRollAndActionRequest = RollAndActionsRequest<NumericDice>;
-pub type FudgeRollAndActionRequest = RollAndActionsRequest<FudgeDice>;
-
-impl<T: DiceBounds> RollAndActionsRequest<T> {
-    pub fn new(roll_request: RollRequest<T>) -> RollAndActionsRequest<T> {
-        RollAndActionsRequest {
-            roll_request,
-            actions: vec![],
-        }
-    }
-
-    pub fn add_action(mut self, action: Action) -> RollAndActionsRequest<T> {
-        self.actions.push(action);
-        self
-    }
-
-    pub fn add_actions(self, actions: Vec<Action>) -> RollAndActionsRequest<T> {
-        let mut self_mut = self;
-        for action in actions.into_iter() {
-            self_mut = self_mut.add_action(action);
-        }
-        self_mut
-    }
-}
-
-impl<V: DiceBounds> RollAndActionsRequest<V> {
-    pub fn roll<T: RollBounds>(self, dice: &Roll<T, V>) -> Result<Rolls<T, V>, Error>
-    where
-        Rolls<T, V>: Apply<T, V>,
-    {
-        let mut rolls = Rolls::<T, V>::new(self.roll_request, dice);
-        for action in self.actions.iter() {
-            rolls = Apply::<T, V>::apply(&rolls, action, dice)?;
-        }
-        Ok(rolls)
-    }
-}
-
-#[derive(Debug)]
 pub struct TypedRollSession<T: RollBounds, V: DiceBounds> {
+    pub(crate) requests: Vec<RollRequest<V>>,
     pub rolls: Vec<Rolls<T, V>>,
     dice: DiceGenerator,
 }
@@ -72,18 +29,13 @@ impl<T: RollBounds, V: DiceBounds> TypedRollSession<T, V> {
         Rolls<T, V>: Apply<T, V>,
         dice::DiceGenerator: dice::Roll<T, V>,
     {
-        TypedRollSession::build_with_actions(
-            dice_requests
-                .into_iter()
-                .map(|roll_request| RollAndActionsRequest::new(roll_request))
-                .collect::<Vec<RollAndActionsRequest<V>>>(),
-        )
-        // TODO for now, without action, there's no reason for it to fail. But who can know what the future holds?
-        .expect("How did this happen to us?")
+        TypedRollSession::build_with_actions(dice_requests)
+            // TODO for now, without action, there's no reason for it to fail. But who can know what the future holds?
+            .expect("How did this happen to us?")
     }
 
     pub fn build_with_actions(
-        requests: Vec<RollAndActionsRequest<V>>,
+        requests: Vec<RollRequest<V>>,
     ) -> Result<TypedRollSession<T, V>, Error>
     where
         Rolls<T, V>: Apply<T, V>,
@@ -91,10 +43,11 @@ impl<T: RollBounds, V: DiceBounds> TypedRollSession<T, V> {
     {
         let dice = DiceGenerator::new();
         let rolls: Result<Vec<Rolls<T, V>>, Error> = requests
-            .into_iter()
+            .iter()
             .map(|dice_request| dice_request.roll(&dice))
             .collect();
         Ok(TypedRollSession {
+            requests: requests,
             rolls: rolls?,
             dice,
         })

@@ -1,3 +1,6 @@
+use crate::actions::Action;
+use crate::actions::Apply;
+use crate::errors::Error;
 use core::fmt::Debug;
 use core::fmt::Display;
 use core::hash::Hash;
@@ -128,23 +131,55 @@ impl DiceGenerator {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollRequest<T: DiceBounds> {
     pub(crate) number: DiceNumber,
     pub(crate) dice: T,
+    pub actions: Vec<Action>,
 }
+
 pub type NumericRollRequest = RollRequest<NumericDice>;
 pub type FudgeRollRequest = RollRequest<FudgeDice>;
 
 impl<T: DiceBounds> RollRequest<T> {
     pub fn new(number: DiceNumber, dice: T) -> RollRequest<T> {
-        RollRequest { number, dice }
+        RollRequest {
+            number,
+            dice,
+            actions: vec![],
+        }
+    }
+
+    pub fn add_action(mut self, action: Action) -> RollRequest<T> {
+        self.actions.push(action);
+        self
+    }
+
+    pub fn add_actions(self, actions: Vec<Action>) -> RollRequest<T> {
+        let mut self_mut = self;
+        for action in actions.into_iter() {
+            self_mut = self_mut.add_action(action);
+        }
+        self_mut
+    }
+}
+
+impl<V: DiceBounds> RollRequest<V> {
+    pub fn roll<T: RollBounds>(&self, dice: &Roll<T, V>) -> Result<Rolls<T, V>, Error>
+    where
+        Rolls<T, V>: Apply<T, V>,
+    {
+        let mut rolls = Rolls::<T, V>::new(self.clone(), dice);
+        for action in self.actions.iter() {
+            rolls = Apply::<T, V>::apply(&rolls, action, dice)?;
+        }
+        Ok(rolls)
     }
 }
 
 #[derive(Debug)]
 pub struct Rolls<T: RollBounds, V: DiceBounds> {
-    pub dice_request: RollRequest<V>,
+    pub dice: V,
     pub description: String,
     pub rolls: Vec<T>,
 }
@@ -154,7 +189,7 @@ impl<T: RollBounds, V: DiceBounds> Rolls<T, V> {
         Rolls {
             description: dice_request.to_string(),
             rolls: dice.roll(dice_request.number, &dice_request.dice),
-            dice_request,
+            dice: dice_request.dice,
         }
     }
 }

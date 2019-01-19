@@ -2,10 +2,7 @@ use crate::actions::Action;
 use crate::actions::Aggregation;
 use crate::dice::*;
 use crate::errors::{Error, ErrorKind};
-use crate::FudgeRollAndActionRequest;
 use crate::MultiTypeSession;
-use crate::NumericRollAndActionRequest;
-use crate::RollAndActionsRequest;
 use crate::{AggregatableSession, FudgeSession, NumericSession, TransformableSession};
 use std::str::FromStr;
 
@@ -63,8 +60,8 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
     match RequestParser::parse(Rule::roll_request, s) {
         Err(err) => Err(Error::from(err)),
         Ok(mut parsed_roll_request) => {
-            let mut num_request_dice: Vec<NumericRollAndActionRequest> = vec![];
-            let mut fudge_request_dice: Vec<FudgeRollAndActionRequest> = vec![];
+            let mut num_request_dice: Vec<NumericRollRequest> = vec![];
+            let mut fudge_request_dice: Vec<FudgeRollRequest> = vec![];
             let mut aggregation: Option<Aggregation> = None;
             let mut actions: Vec<Action> = vec![];
             for dice_or_action in parsed_roll_request.next().unwrap().into_inner() {
@@ -73,15 +70,11 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                         for dice in dice_or_action.into_inner() {
                             let parsed_dice = parse_dice(dice)?;
                             match parsed_dice.0 {
-                                Some(dice) => {
-                                    num_request_dice.push(RollAndActionsRequest::new(dice))
-                                }
+                                Some(dice) => num_request_dice.push(dice),
                                 _ => (),
                             };
                             match parsed_dice.1 {
-                                Some(dice) => {
-                                    fudge_request_dice.push(RollAndActionsRequest::new(dice))
-                                }
+                                Some(dice) => fudge_request_dice.push(dice),
                                 _ => (),
                             };
                         }
@@ -110,20 +103,15 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                         }
                         match &dice.as_ref().unwrap().0 {
                             Some(num_dice) => {
-                                num_request_dice.push(
-                                    NumericRollAndActionRequest::new(num_dice.clone())
-                                        .add_actions(dice_actions),
-                                );
+                                num_request_dice.push(num_dice.clone().add_actions(dice_actions));
                                 continue;
                             }
                             _ => (),
                         };
                         match &dice.as_ref().unwrap().1 {
                             Some(fudge_dice) => {
-                                fudge_request_dice.push(
-                                    FudgeRollAndActionRequest::new(fudge_dice.clone())
-                                        .add_actions(dice_actions),
-                                );
+                                fudge_request_dice
+                                    .push(fudge_dice.clone().add_actions(dice_actions));
                             }
                             _ => (),
                         };
@@ -332,58 +320,62 @@ mod tests {
 
     #[test]
     fn read_numbered_dice() {
-        let dice_request = &NumericSession::from_str(&String::from("5d6"))
+        let requests = &NumericSession::from_str(&String::from("5d6"))
             .unwrap()
-            .rolls[0]
-            .dice_request;
-        assert_eq!(dice_request.dice, NumericDice::NumberedDice(6));
-        assert_eq!(dice_request.number, 5);
+            .requests;
+        assert_eq!(
+            *requests,
+            vec![RollRequest::new(5, NumericDice::NumberedDice(6))]
+        );
 
-        let dice_request = &NumericSession::from_str(&String::from("8D3"))
+        let requests = &NumericSession::from_str(&String::from("8D3"))
             .unwrap()
-            .rolls[0]
-            .dice_request;
-        assert_eq!(dice_request.dice, NumericDice::NumberedDice(3));
-        assert_eq!(dice_request.number, 8);
+            .requests;
+        assert_eq!(
+            *requests,
+            vec![RollRequest::new(8, NumericDice::NumberedDice(3))]
+        );
 
-        let dice_request = &NumericSession::from_str(&String::from("D20"))
+        let requests = &NumericSession::from_str(&String::from("D20"))
             .unwrap()
-            .rolls[0]
-            .dice_request;
-        assert_eq!(dice_request.dice, NumericDice::NumberedDice(20));
-        assert_eq!(dice_request.number, 1);
+            .requests;
+        assert_eq!(
+            *requests,
+            vec![RollRequest::new(1, NumericDice::NumberedDice(20))]
+        );
     }
 
     #[test]
     fn read_fudge_dice() {
-        let dice_request =
-            &FudgeSession::from_str(&String::from("F")).unwrap().rolls[0].dice_request;
-        assert_eq!(dice_request.dice, FudgeDice::FudgeDice);
-        assert_eq!(dice_request.number, 1);
+        let requests = &FudgeSession::from_str(&String::from("F")).unwrap().requests;
+        assert_eq!(*requests, vec![RollRequest::new(1, FudgeDice::FudgeDice)]);
 
-        let dice_request =
-            &FudgeSession::from_str(&String::from("10F")).unwrap().rolls[0].dice_request;
-        assert_eq!(dice_request.dice, FudgeDice::FudgeDice);
-        assert_eq!(dice_request.number, 10);
+        let requests = &FudgeSession::from_str(&String::from("10F"))
+            .unwrap()
+            .requests;
+        assert_eq!(*requests, vec![RollRequest::new(10, FudgeDice::FudgeDice)]);
     }
 
     #[test]
     fn read_const_dice() {
-        let dice_request =
-            &NumericSession::from_str(&String::from("+5")).unwrap().rolls[0].dice_request;
-        assert_eq!(dice_request.dice, NumericDice::ConstDice(5));
-        assert_eq!(dice_request.number, 1);
-
-        let dice_request = &NumericSession::from_str(&String::from("+142"))
+        let requests = &NumericSession::from_str(&String::from("+5"))
             .unwrap()
-            .rolls[0]
-            .dice_request;
-        assert_eq!(dice_request.dice, NumericDice::ConstDice(142));
-        assert_eq!(dice_request.number, 1);
+            .requests;
+        assert_eq!(
+            *requests,
+            vec![RollRequest::new(1, NumericDice::ConstDice(5))]
+        );
+
+        let requests = &NumericSession::from_str(&String::from("+142"))
+            .unwrap()
+            .requests;
+        assert_eq!(
+            *requests,
+            vec![RollRequest::new(1, NumericDice::ConstDice(142))]
+        );
     }
 
     // // TODO add test for global actions + dice actions + KO tests for incompatibility
-
     #[test]
     fn read_ko() {
         parse_request(&String::from("5"), false).unwrap_err();
