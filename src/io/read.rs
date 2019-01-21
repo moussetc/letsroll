@@ -245,13 +245,19 @@ fn parse_action(
         Rule::action_total => actions.push(Action::Total),
 
         Rule::action_mult => {
-            actions.push(parse_multiply_action(action)?);
+            actions.push(Action::MultiplyBy(parse_positive_int(action)?));
         }
         Rule::action_reroll => {
             actions.push(parse_reroll_action(action)?);
         }
         Rule::action_explode => {
             actions.push(parse_explode_action(action)?);
+        }
+        Rule::action_keep_best => {
+            actions.push(Action::KeepBest(parse_positive_int(action)? as DiceNumber));
+        }
+        Rule::action_keep_worst => {
+            actions.push(Action::KeepWorst(parse_positive_int(action)? as DiceNumber));
         }
         _ => unreachable!(),
     };
@@ -302,10 +308,10 @@ fn parse_explode_action(action: pest::iterators::Pair<'_, Rule>) -> Result<Actio
     }
 }
 
-fn parse_multiply_action(action: pest::iterators::Pair<'_, Rule>) -> Result<Action, Error> {
+fn parse_positive_int(action: pest::iterators::Pair<'_, Rule>) -> Result<u32, Error> {
     let rule = action.into_inner().next().unwrap();
     match rule.as_rule() {
-        Rule::factor => Ok(Action::MultiplyBy(rule.as_str().parse::<NumericRoll>()?)),
+        Rule::POSITIVE_INT => Ok(rule.as_str().parse()?),
         _ => unreachable!(),
     }
 }

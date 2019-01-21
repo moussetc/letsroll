@@ -1,7 +1,9 @@
 WHITESPACE = _{ " " }
+POSITIVE_INT = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+
 // Dice definitions
-dice_number = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
-dice_sides = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+dice_number = @{ POSITIVE_INT }
+dice_sides = @{ POSITIVE_INT }
 numbered_dice = ${ dice_number? ~ ^"D" ~ dice_sides }
 fudge_dice = ${ dice_number? ~ ^"F" ~ !(ASCII_ALPHANUMERIC)} // Remove ambiguity with "Flip" by forbidding any following alphanumeric character
 num_const_dice = ${ "+" ~ dice_sides }
@@ -13,14 +15,16 @@ action_sum = @{ ^"Sum" }
 action_flip = @{ ^"Flip" }
 action_total = @{ ^"Total" }
 
-factor = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
-action_mult = ${ ^"x" ~ factor }
+action_mult = ${ ^"x" ~ POSITIVE_INT }
+
+action_keep_best = ${ ^"KeepBest(" ~ POSITIVE_INT ~ ")" }
+action_keep_worst = ${ ^"KeepWorst(" ~ POSITIVE_INT ~ ")" }
 
 num_roll_value = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 fudge_roll_value = @{ "+" | "-" | "0" }
 action_reroll = ${ ^"Reroll(" ~ ((num_roll_value ~ ("," ~ num_roll_value)* ) | (fudge_roll_value ~ ("," ~ fudge_roll_value)* )) ~ ")" }
 action_explode = ${ ^"Explode(" ~ ((num_roll_value ~ ("," ~ num_roll_value)* ) | (fudge_roll_value ~ ("," ~ fudge_roll_value)* )) ~ ")" }
-action = ${ action_sum | action_flip | action_total | action_mult | action_explode | action_reroll }
+action = ${ action_sum | action_flip | action_total | action_mult | action_explode | action_reroll | action_keep_best | action_keep_worst}
 
 aggregation_count = @{ ^"Count" }
 aggregation = ${ aggregation_count }

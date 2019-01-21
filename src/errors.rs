@@ -38,6 +38,12 @@ impl Error {
         }
     }
 
+    pub(crate) fn bad_action_parameter(message: &String) -> Error {
+        Error {
+            kind: ErrorKind::BadActionParameter(message.clone()),
+        }
+    }
+
     /// Return the kind of this error.
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
@@ -84,6 +90,9 @@ pub enum ErrorKind {
 
     // Occurs when file operations fail
     File(String),
+
+    // Occurs when an action parameter is invalid
+    BadActionParameter(String),
 }
 
 impl error::Error for Error {
@@ -94,6 +103,7 @@ impl error::Error for Error {
             ErrorKind::IncompatibleAction(_) => "Action applying error",
             ErrorKind::BadDice(_) => "Dice creation error",
             ErrorKind::File(_) => "File operation error",
+            ErrorKind::BadActionParameter(_) => "Bad action parameter error",
         }
     }
 }
@@ -106,6 +116,7 @@ impl fmt::Display for Error {
             ErrorKind::IncompatibleAction(ref s) => write!(f, "Action applying error: {}", s),
             ErrorKind::BadDice(ref s) => write!(f, "Dice creation error: {}", s),
             ErrorKind::File(ref s) => write!(f, "File operation error: {}", s),
+            ErrorKind::BadActionParameter(ref s) => write!(f, "Bad action parameter error {}", s),
         }
     }
 }

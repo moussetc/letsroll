@@ -31,6 +31,10 @@ pub enum Action {
     Explode(Vec<NumericRoll>),
     /// Add new rolls for rolls equal to the action parameters (fudge rolls only, cf. trait [Explode](trait.Explode.html)).   
     ExplodeFudge(Vec<FudgeRoll>),
+    /// Keep only the N best rolls (numeric rolls only, cf. trait [KeepBest](trait.KeepBest.html)).   
+    KeepBest(DiceNumber),
+    /// Keep only the N worst rolls (numeric rolls only, cf. trait [KeepWorst](trait.KeepWorst.html)).   
+    KeepWorst(DiceNumber),
 }
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -289,6 +293,78 @@ impl TotalSum for Vec<NumericRolls> {
     }
 }
 
+/// Action that multiply the rolls by a factor
+/// # Example
+/// ```
+/// # use letsroll::actions::KeepBest;
+/// let input_rolls = vec![1,2,3,4,5];
+/// assert_eq!(input_rolls.keep_best(2).unwrap(), vec![4,5]);
+/// ```
+pub trait KeepBest<T> {
+    fn keep_best(&self, keep: DiceNumber) -> Result<T, Error>;
+}
+impl KeepBest<Vec<NumericRoll>> for Vec<NumericRoll> {
+    fn keep_best(&self, keep: DiceNumber) -> Result<Vec<NumericRoll>, Error> {
+        if keep as usize > self.len() {
+            return Err(Error::bad_action_parameter(&format!(
+                "Can't keep {} rolls because there are only {} available rolls.",
+                keep,
+                self.len()
+            )));
+        }
+        let mut sorted = self.clone();
+        sorted.sort();
+        Ok(sorted
+            .into_iter()
+            .skip(self.len() - keep as usize)
+            .collect())
+    }
+}
+impl KeepBest<NumericRolls> for NumericRolls {
+    fn keep_best(&self, keep: DiceNumber) -> Result<NumericRolls, Error> {
+        Ok(Rolls {
+            description: format!("{} KeepBest({})", &self.description, keep),
+            dice: self.dice.clone(),
+            rolls: self.rolls.keep_best(keep)?,
+        })
+    }
+}
+
+/// Action that multiply the rolls by a factor
+/// # Example
+/// ```
+/// # use letsroll::actions::KeepWorst;
+/// let input_rolls = vec![1,2,3,4,5];
+/// assert_eq!(input_rolls.keep_worst(2).unwrap(), vec![1,2]);
+/// ```
+pub trait KeepWorst<T> {
+    fn keep_worst(&self, keep: DiceNumber) -> Result<T, Error>;
+}
+impl KeepWorst<Vec<NumericRoll>> for Vec<NumericRoll> {
+    fn keep_worst(&self, keep: DiceNumber) -> Result<Vec<NumericRoll>, Error> {
+        if keep as usize > self.len() {
+            return Err(Error::bad_action_parameter(&format!(
+                "Can't keep {} rolls because there are only {} available rolls.",
+                keep,
+                self.len()
+            )));
+        }
+
+        let mut sorted = self.clone();
+        sorted.sort();
+        Ok(sorted.into_iter().take(keep as usize).collect())
+    }
+}
+impl KeepWorst<NumericRolls> for NumericRolls {
+    fn keep_worst(&self, keep: DiceNumber) -> Result<NumericRolls, Error> {
+        Ok(Rolls {
+            description: format!("{} KeepWorst({})", &self.description, keep),
+            dice: self.dice.clone(),
+            rolls: self.rolls.keep_worst(keep)?,
+        })
+    }
+}
+
 /// CountValues will count the occurences of each present value.
 ///
 /// For example, if given the following rolls:
@@ -346,6 +422,8 @@ impl Apply<NumericRoll, NumericDice> for NumericRolls {
                     &String::from("numeric roll"),
                 ));
             }
+            Action::KeepBest(keep) => self.keep_best(*keep),
+            Action::KeepWorst(keep) => self.keep_worst(*keep),
         }
     }
 }
@@ -364,6 +442,8 @@ impl Apply<FudgeRoll, FudgeDice> for FudgeRolls {
             | Action::MultiplyBy(_)
             | Action::FlipFlop
             | Action::RerollNumeric(_)
+            | Action::KeepBest(_)
+            | Action::KeepWorst(_)
             | Action::Explode(_) => Err(Error::incompatible(
                 &action.to_string(),
                 &String::from("fudge roll"),
@@ -455,6 +535,38 @@ mod tests {
     }
 
     #[test]
+    fn transform_keep_best() {
+        let input = vec![1, 5, 3, 2, 5];
+        let dice_request =
+            NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
+        let dice = DiceGenerator::new();
+        let rolls = NumericRolls::new(dice_request, &dice);
+        assert_eq!(rolls.keep_best(0).unwrap().rolls, vec![]);
+        assert_eq!(rolls.keep_best(1).unwrap().rolls, vec![5]);
+        assert_eq!(rolls.keep_best(2).unwrap().rolls, vec![5, 5]);
+        assert_eq!(rolls.keep_best(3).unwrap().rolls, vec![3, 5, 5]);
+        assert_eq!(rolls.keep_best(4).unwrap().rolls, vec![2, 3, 5, 5]);
+        assert_eq!(rolls.keep_best(5).unwrap().rolls, vec![1, 2, 3, 5, 5]);
+        assert!(!rolls.keep_best(8).is_ok());
+    }
+
+    #[test]
+    fn transform_keep_worst() {
+        let input = vec![1, 5, 3, 2, 5];
+        let dice_request =
+            NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
+        let dice = DiceGenerator::new();
+        let rolls = NumericRolls::new(dice_request, &dice);
+        assert_eq!(rolls.keep_worst(0).unwrap().rolls, vec![]);
+        assert_eq!(rolls.keep_worst(1).unwrap().rolls, vec![1]);
+        assert_eq!(rolls.keep_worst(2).unwrap().rolls, vec![1, 2]);
+        assert_eq!(rolls.keep_worst(3).unwrap().rolls, vec![1, 2, 3]);
+        assert_eq!(rolls.keep_worst(4).unwrap().rolls, vec![1, 2, 3, 5]);
+        assert_eq!(rolls.keep_worst(5).unwrap().rolls, vec![1, 2, 3, 5, 5]);
+        assert!(!rolls.keep_worst(8).is_ok());
+    }
+
+    #[test]
     fn transform_total_sum() {
         let dice = DiceGenerator::new();
         let rolls: Vec<NumericRolls> = (1..=5)
@@ -502,28 +614,16 @@ mod tests {
     }
 
     #[test]
-    fn request_reroll_numeric() {
+    fn action_type_compatibilty() {
         test_action_implemented_for_types(Action::RerollNumeric(vec![1]), true, false);
-    }
-
-    #[test]
-    fn request_reroll_text() {
         test_action_implemented_for_types(Action::RerollFudge(vec![FudgeRoll::Blank]), false, true);
-    }
-
-    #[test]
-    fn request_sum() {
         test_action_implemented_for_types(Action::Sum, true, false);
-    }
-
-    #[test]
-    fn request_multiply_by() {
         test_action_implemented_for_types(Action::MultiplyBy(42), true, false);
-    }
-
-    #[test]
-    fn request_flipflop() {
         test_action_implemented_for_types(Action::FlipFlop, true, false);
+        println!("coucou");
+        test_action_implemented_for_types(Action::KeepBest(1), true, false);
+        println!("coucou2");
+        test_action_implemented_for_types(Action::KeepWorst(1), true, false);
     }
 
     /// Test the compatibility between actions and roll types
