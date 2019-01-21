@@ -259,6 +259,14 @@ fn parse_action(
         Rule::action_keep_worst => {
             actions.push(Action::KeepWorst(parse_positive_int(action)? as DiceNumber));
         }
+        Rule::action_reroll_best => {
+            actions.push(Action::RerollBest(parse_positive_int(action)? as DiceNumber));
+        }
+        Rule::action_reroll_worst => {
+            actions.push(Action::RerollWorst(
+                parse_positive_int(action)? as DiceNumber
+            ));
+        }
         _ => unreachable!(),
     };
     Ok(())

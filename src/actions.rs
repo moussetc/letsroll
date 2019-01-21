@@ -35,6 +35,10 @@ pub enum Action {
     KeepBest(DiceNumber),
     /// Keep only the N worst rolls (numeric rolls only, cf. trait [KeepWorst](trait.KeepWorst.html)).   
     KeepWorst(DiceNumber),
+    /// Reroll the N best rolls (numeric rolls only, cf. trait [RerollBest](trait.RerollBest.html)).   
+    RerollBest(DiceNumber),
+    /// Reroll the N worst rolls (numeric rolls only, cf. trait [RerollWorst](trait.RerollWorst.html)).   
+    RerollWorst(DiceNumber),
 }
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -42,7 +46,7 @@ impl fmt::Display for Action {
     }
 }
 
-/// Enumeration of all possible aggregation.
+/// Enumeration of all possible aggregation traits.
 ///
 /// An aggregation is an final action: you can't apply any other action afterward.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -293,7 +297,7 @@ impl TotalSum for Vec<NumericRolls> {
     }
 }
 
-/// Action that multiply the rolls by a factor
+/// Action that only takes the N best rolls
 /// # Example
 /// ```
 /// # use letsroll::actions::KeepBest;
@@ -330,7 +334,26 @@ impl KeepBest<NumericRolls> for NumericRolls {
     }
 }
 
-/// Action that multiply the rolls by a factor
+/// Action that rerolls once the N best input rolls
+/// # Example
+/// ```
+/// # use letsroll::actions::RerollBest;
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
+/// let input_rolls = vec![5,1,10];
+/// let dice = DiceGenerator::new();
+/// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
+/// let rolls = NumericRolls::new(dice_request, &dice);
+/// assert_eq!(rolls.reroll_best(&dice, 1).unwrap().rolls, vec![1,5,5]);
+/// ```
+pub trait RerollBest<T> {
+    fn reroll_best(
+        &self,
+        dice: &Roll<NumericRoll, NumericDice>,
+        reroll: DiceNumber,
+    ) -> Result<T, Error>;
+}
+
+/// Action that only takes the N worst rolls
 /// # Example
 /// ```
 /// # use letsroll::actions::KeepWorst;
@@ -361,6 +384,78 @@ impl KeepWorst<NumericRolls> for NumericRolls {
             description: format!("{} KeepWorst({})", &self.description, keep),
             dice: self.dice.clone(),
             rolls: self.rolls.keep_worst(keep)?,
+        })
+    }
+}
+
+impl RerollBest<NumericRolls> for NumericRolls {
+    fn reroll_best(
+        &self,
+        dice: &Roll<NumericRoll, NumericDice>,
+        reroll: DiceNumber,
+    ) -> Result<NumericRolls, Error> {
+        if reroll as usize > self.rolls.len() {
+            return Err(Error::bad_action_parameter(&format!(
+                "Can't reroll {} rolls because there are only {} available rolls.",
+                reroll,
+                self.rolls.len()
+            )));
+        }
+        let mut rolls = self
+            .rolls
+            .keep_worst(self.rolls.len() as DiceNumber - reroll)?;
+        rolls.append(&mut dice.roll(reroll, &self.dice));
+
+        Ok(Rolls {
+            description: format!("{} RerollBest({})", &self.description, reroll),
+            dice: self.dice.clone(),
+            rolls: rolls,
+        })
+    }
+}
+
+/// Action that takes the N worst rolls and replace them by rerolls (once)
+/// # Example
+/// ```
+/// # use letsroll::actions::RerollWorst;
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
+/// let input_rolls = vec![5,1,10];
+/// let dice = DiceGenerator::new();
+/// let dice_request = NumericRollRequest::new(3, NumericDice::RepeatingDice(input_rolls));
+/// let rolls = NumericRolls::new(dice_request, &dice);
+/// assert_eq!(rolls.reroll_worst(&dice, 1).unwrap().rolls, vec![5, 10, 5]);
+/// ```
+pub trait RerollWorst<T> {
+    fn reroll_worst(
+        &self,
+        dice: &Roll<NumericRoll, NumericDice>,
+        reroll: DiceNumber,
+    ) -> Result<T, Error>;
+}
+
+impl RerollWorst<NumericRolls> for NumericRolls {
+    fn reroll_worst(
+        &self,
+        dice: &Roll<NumericRoll, NumericDice>,
+        reroll: DiceNumber,
+    ) -> Result<NumericRolls, Error> {
+        if reroll as usize > self.rolls.len() {
+            return Err(Error::bad_action_parameter(&format!(
+                "Can't reroll {} rolls because there are only {} available rolls.",
+                reroll,
+                self.rolls.len()
+            )));
+        }
+
+        let mut rolls = self
+            .rolls
+            .keep_best(self.rolls.len() as DiceNumber - reroll)?;
+        rolls.append(&mut dice.roll(reroll, &self.dice));
+
+        Ok(Rolls {
+            description: format!("{} RerollWorst({})", &self.description, reroll),
+            dice: self.dice.clone(),
+            rolls: rolls,
         })
     }
 }
@@ -424,6 +519,8 @@ impl Apply<NumericRoll, NumericDice> for NumericRolls {
             }
             Action::KeepBest(keep) => self.keep_best(*keep),
             Action::KeepWorst(keep) => self.keep_worst(*keep),
+            Action::RerollBest(keep) => self.reroll_best(dice, *keep),
+            Action::RerollWorst(keep) => self.reroll_worst(dice, *keep),
         }
     }
 }
@@ -444,6 +541,8 @@ impl Apply<FudgeRoll, FudgeDice> for FudgeRolls {
             | Action::RerollNumeric(_)
             | Action::KeepBest(_)
             | Action::KeepWorst(_)
+            | Action::RerollBest(_)
+            | Action::RerollWorst(_)
             | Action::Explode(_) => Err(Error::incompatible(
                 &action.to_string(),
                 &String::from("fudge roll"),
@@ -564,6 +663,74 @@ mod tests {
         assert_eq!(rolls.keep_worst(4).unwrap().rolls, vec![1, 2, 3, 5]);
         assert_eq!(rolls.keep_worst(5).unwrap().rolls, vec![1, 2, 3, 5, 5]);
         assert!(!rolls.keep_worst(8).is_ok());
+    }
+
+    #[test]
+    fn transform_reroll_best() {
+        let input = vec![1, 2, 3, 4, 5];
+        let dice_request =
+            NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
+        let dice = DiceGenerator::new();
+        let rolls = NumericRolls::new(dice_request, &dice);
+        assert_eq!(
+            rolls.reroll_best(&dice, 0).unwrap().rolls,
+            vec![1, 2, 3, 4, 5]
+        );
+        assert_eq!(
+            rolls.reroll_best(&dice, 1).unwrap().rolls,
+            vec![1, 2, 3, 4, 1]
+        );
+        assert_eq!(
+            rolls.reroll_best(&dice, 2).unwrap().rolls,
+            vec![1, 2, 3, 1, 2]
+        );
+        assert_eq!(
+            rolls.reroll_best(&dice, 3).unwrap().rolls,
+            vec![1, 2, 1, 2, 3]
+        );
+        assert_eq!(
+            rolls.reroll_best(&dice, 4).unwrap().rolls,
+            vec![1, 1, 2, 3, 4]
+        );
+        assert_eq!(
+            rolls.reroll_best(&dice, 5).unwrap().rolls,
+            vec![1, 2, 3, 4, 5]
+        );
+        assert!(!rolls.keep_best(8).is_ok());
+    }
+
+    #[test]
+    fn transform_reroll_worst() {
+        let input = vec![5, 4, 3, 2, 1];
+        let dice_request =
+            NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
+        let dice = DiceGenerator::new();
+        let rolls = NumericRolls::new(dice_request, &dice);
+        assert_eq!(
+            rolls.reroll_worst(&dice, 0).unwrap().rolls,
+            vec![1, 2, 3, 4, 5]
+        );
+        assert_eq!(
+            rolls.reroll_worst(&dice, 1).unwrap().rolls,
+            vec![2, 3, 4, 5, 5]
+        );
+        assert_eq!(
+            rolls.reroll_worst(&dice, 2).unwrap().rolls,
+            vec![3, 4, 5, 5, 4]
+        );
+        assert_eq!(
+            rolls.reroll_worst(&dice, 3).unwrap().rolls,
+            vec![4, 5, 5, 4, 3]
+        );
+        assert_eq!(
+            rolls.reroll_worst(&dice, 4).unwrap().rolls,
+            vec![5, 5, 4, 3, 2]
+        );
+        assert_eq!(
+            rolls.reroll_worst(&dice, 5).unwrap().rolls,
+            vec![5, 4, 3, 2, 1]
+        );
+        assert!(!rolls.reroll_worst(&dice, 8).is_ok());
     }
 
     #[test]
