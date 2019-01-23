@@ -69,14 +69,12 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                     Rule::dice => {
                         for dice in dice_or_action.into_inner() {
                             let parsed_dice = parse_dice(dice)?;
-                            match parsed_dice.0 {
-                                Some(dice) => num_request_dice.push(dice),
-                                _ => (),
-                            };
-                            match parsed_dice.1 {
-                                Some(dice) => fudge_request_dice.push(dice),
-                                _ => (),
-                            };
+                            if let Some(dice) = parsed_dice.0 {
+                                num_request_dice.push(dice);
+                            }
+                            if let Some(dice) = parsed_dice.1 {
+                                fudge_request_dice.push(dice);
+                            }
                         }
                     }
                     Rule::dice_and_action => {
@@ -101,20 +99,13 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                                 _ => unreachable!(),
                             }
                         }
-                        match &dice.as_ref().unwrap().0 {
-                            Some(num_dice) => {
-                                num_request_dice.push(num_dice.clone().add_actions(dice_actions));
-                                continue;
-                            }
-                            _ => (),
-                        };
-                        match &dice.as_ref().unwrap().1 {
-                            Some(fudge_dice) => {
-                                fudge_request_dice
-                                    .push(fudge_dice.clone().add_actions(dice_actions));
-                            }
-                            _ => (),
-                        };
+                        if let Some(num_dice) = &dice.as_ref().unwrap().0 {
+                            num_request_dice.push(num_dice.clone().add_actions(dice_actions));
+                            continue;
+                        }
+                        if let Some(fudge_dice) = &dice.as_ref().unwrap().1 {
+                            fudge_request_dice.push(fudge_dice.clone().add_actions(dice_actions));
+                        }
                     }
                     Rule::action => {
                         for action in dice_or_action.into_inner() {

@@ -34,11 +34,8 @@ fn main() {
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
 
-    match run(args) {
-        Ok(_) => (),
-        Err(error) => {
-            println!("FAILURE : {}", error);
-        }
+    if let Err(error) = run(args) {
+        eprintln!("FAILURE : {}", error);
     }
 }
 

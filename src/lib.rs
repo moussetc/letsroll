@@ -115,14 +115,12 @@ pub struct MultiTypeSession {
 
 impl TransformableSession for MultiTypeSession {
     fn add_transformation(&mut self, action: actions::Action) -> Result<(), Error> {
-        match &mut self.numeric_session {
-            Some(ref mut session) => session.add_transformation(action.clone())?,
-            None => (),
-        };
-        match &mut self.fudge_session {
-            Some(ref mut session) => session.add_transformation(action.clone())?,
-            None => (),
-        };
+        if let Some(ref mut session) = &mut self.numeric_session {
+            session.add_transformation(action.clone())?;
+        }
+        if let Some(ref mut session) = &mut self.fudge_session {
+            session.add_transformation(action.clone())?;
+        }
         Ok(())
     }
 }

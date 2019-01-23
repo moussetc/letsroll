@@ -92,14 +92,12 @@ impl<T: RollBounds, V: DiceBounds> ToString for TypedRollSession<T, V> {
 impl ToString for MultiTypeSession {
     fn to_string(&self) -> String {
         let mut subresults: Vec<String> = vec![];
-        match &self.numeric_session {
-            Some(session) => subresults.push(session.to_string()),
-            None => (),
-        };
-        match &self.fudge_session {
-            Some(session) => subresults.push(session.to_string()),
-            None => (),
-        };
+        if let Some(session) = &self.numeric_session {
+            subresults.push(session.to_string());
+        }
+        if let Some(session) = &self.fudge_session {
+            subresults.push(session.to_string());
+        }
         subresults.join("\n")
     }
 }
