@@ -23,7 +23,7 @@ impl fmt::Display for NumericDice {
             f,
             "{}",
             match self {
-                NumericDice::ConstDice(const_value) => const_value.to_string(),
+                NumericDice::ConstDice(const_value) => format!("+{}", const_value.to_string()),
                 NumericDice::NumberedDice(sides) => format!("D{}", sides),
                 NumericDice::RepeatingDice(repeat_values) => format!(
                     "[{}...]",
@@ -60,7 +60,11 @@ impl fmt::Display for FudgeDice {
 
 impl<T: DiceBounds> fmt::Display for RollRequest<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.number, self.dice.to_string())
+        let id = match &self.id {
+            Some(ref id) => format!("{}: ", id),
+            None => String::from(""),
+        };
+        write!(f, "{}{}{}", id, self.number, self.dice.to_string())
     }
 }
 
@@ -105,59 +109,72 @@ impl ToString for MultiTypeSession {
 #[cfg(test)]
 mod tests {
 
-    // use crate::dice::*;
-    // use crate::*;
+    use crate::actions::Action;
+    use crate::dice::*;
 
-    // #[test]
-    // fn numeric_roll_to_string() {
-    //     assert_eq!(ConstDice::new(20).roll(1)[0].to_string(), "20");
-    // }
+    #[test]
+    fn numeric_roll_to_string() {
+        let dice = DiceGenerator::new();
+        assert_eq!(
+            dice.roll(1, &NumericDice::ConstDice(20))[0].to_string(),
+            "20"
+        );
+    }
 
-    // #[test]
-    // fn fudge_roll_to_string() {
-    //     assert_eq!(ConstDice::new(FudgeRoll::Blank).roll(1)[0].to_string(), "0");
-    //     assert_eq!(ConstDice::new(FudgeRoll::Minus).roll(1)[0].to_string(), "-");
-    //     assert_eq!(ConstDice::new(FudgeRoll::Plus).roll(1)[0].to_string(), "+");
-    // }
+    #[test]
+    fn fudge_roll_to_string() {
+        let dice = DiceGenerator::new();
+        assert_eq!(
+            dice.roll(1, &FudgeDice::ConstDice(FudgeRoll::Blank))[0].to_string(),
+            "0"
+        );
+        assert_eq!(
+            dice.roll(1, &FudgeDice::ConstDice(FudgeRoll::Minus))[0].to_string(),
+            "-"
+        );
+        assert_eq!(
+            dice.roll(1, &FudgeDice::ConstDice(FudgeRoll::Plus))[0].to_string(),
+            "+"
+        );
+    }
 
-    // #[test]
-    // fn numbered_dice_to_string() {
-    //     assert_eq!(NumberedDice::new(20).to_string(), "D20");
-    // }
+    #[test]
+    fn numbered_dice_to_string() {
+        assert_eq!(NumericDice::NumberedDice(20).to_string(), "D20");
+    }
 
-    // #[test]
-    // fn fudge_dice_to_string() {
-    //     assert_eq!(FudgeDice::new().to_string(), "F");
-    // }
+    #[test]
+    fn fudge_dice_to_string() {
+        assert_eq!(FudgeDice::FudgeDice.to_string(), "F");
+    }
 
-    // #[test]
-    // fn const_dice_to_string() {
-    //     assert_eq!(ConstDice::new(42).to_string(), "+42");
-    // }
+    #[test]
+    fn const_dice_to_string() {
+        assert_eq!(NumericDice::ConstDice(42).to_string(), "+42");
+    }
 
-    // #[test]
-    // fn repeating_dice_to_string() {
-    //     assert_eq!(
-    //         RepeatingDice::new(vec![1, 2, 3]).unwrap().to_string(),
-    //         "[1,2,3,...]"
-    //     );
-    // }
+    #[test]
+    fn repeating_dice_to_string() {
+        assert_eq!(
+            NumericDice::RepeatingDice(vec![1, 2, 3]).to_string(),
+            "[1,2,3,...]"
+        );
+    }
 
-    // #[test]
-    // fn dice_request_to_string() {
-    //     assert_eq!(
-    //         RollRequest::new(DiceKind::TextKind(TextDice::FudgeDice(FudgeDice::new())), 5)
-    //             .to_string(),
-    //         "5F"
-    //     );
-    //     assert_eq!(
-    //         RollRequest::new(
-    //             DiceKind::NumericKind(NumericDice::NumberedDice(NumberedDice::new(6))),
-    //             1
-    //         )
-    //         .to_string(),
-    //         "1D6"
-    //     );
-    // }
+    #[test]
+    fn dice_request_to_string() {
+        assert_eq!(RollRequest::new(5, FudgeDice::FudgeDice).to_string(), "5F");
+        assert_eq!(
+            RollRequest::new(1, NumericDice::NumberedDice(6)).to_string(),
+            "1D6"
+        );
+        assert_eq!(
+            RollRequest::new(10, NumericDice::NumberedDice(12))
+                .add_id(Some(String::from("FIRE")))
+                .add_action(Action::KeepBest(1))
+                .to_string(),
+            "FIRE: 10D12"
+        );
+    }
 
 }

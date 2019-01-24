@@ -78,6 +78,7 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                         }
                     }
                     Rule::dice_and_action => {
+                        let mut dice_id: Option<String> = None;
                         let mut dice: Option<(
                             Option<NumericRollRequest>,
                             Option<FudgeRollRequest>,
@@ -85,6 +86,9 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                         let mut dice_actions: Vec<Action> = vec![];
                         for dice_or_dice_action in dice_or_action.into_inner() {
                             match dice_or_dice_action.as_rule() {
+                                Rule::DICE_ID => {
+                                    dice_id = Some(dice_or_dice_action.as_str().to_string());
+                                }
                                 Rule::dice => {
                                     dice = Some(parse_dice(
                                         dice_or_dice_action.into_inner().next().unwrap(),
@@ -100,11 +104,13 @@ pub fn parse_request(s: &str, default_total: bool) -> Result<MultiTypeSession, E
                             }
                         }
                         if let Some(num_dice) = &dice.as_ref().unwrap().0 {
-                            num_request_dice.push(num_dice.clone().add_actions(dice_actions));
+                            num_request_dice
+                                .push(num_dice.clone().add_actions(dice_actions).add_id(dice_id));
                             continue;
                         }
                         if let Some(fudge_dice) = &dice.as_ref().unwrap().1 {
-                            fudge_request_dice.push(fudge_dice.clone().add_actions(dice_actions));
+                            fudge_request_dice
+                                .push(fudge_dice.clone().add_actions(dice_actions).add_id(dice_id));
                         }
                     }
                     Rule::action => {
@@ -378,6 +384,34 @@ mod tests {
             *requests,
             vec![RollRequest::new(1, NumericDice::ConstDice(142))]
         );
+    }
+
+    #[test]
+    fn read_request_with_id() {
+        let requests = &NumericSession::from_str(&String::from("(FIRE +5)"))
+            .unwrap()
+            .requests;
+        assert_eq!(
+            *requests,
+            vec![RollRequest::new(1, NumericDice::ConstDice(5)).add_id(Some(String::from("FIRE")))]
+        );
+
+        let requests = &FudgeSession::from_str(&String::from("(ABC_4A 10F)"))
+            .unwrap()
+            .requests;
+        assert_eq!(
+            *requests,
+            vec![RollRequest::new(10, FudgeDice::FudgeDice).add_id(Some(String::from("ABC_4A")))]
+        );
+
+        // Without parenthesis
+        assert!(!&NumericSession::from_str(&String::from("FIRE +5")).is_ok());
+
+        // Uncompliant ID
+        assert!(!&NumericSession::from_str(&String::from("FI +5")).is_ok());
+        assert!(!&NumericSession::from_str(&String::from("42A +5")).is_ok());
+        assert!(!&NumericSession::from_str(&String::from("A2A +5")).is_ok());
+        assert!(!&NumericSession::from_str(&String::from("_ABC +5")).is_ok());
     }
 
     // // TODO add test for global actions + dice actions + KO tests for incompatibility

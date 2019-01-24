@@ -8,6 +8,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cell::RefCell;
 
+pub type DiceID = String;
 pub type DiceNumber = u8;
 /// Type of roll result for numbered dice (like D20)
 pub type NumericRoll = u32;
@@ -134,6 +135,7 @@ impl DiceGenerator {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollRequest<T: DiceBounds> {
     pub(crate) number: DiceNumber,
+    pub(crate) id: Option<DiceID>,
     pub(crate) dice: T,
     pub actions: Vec<Action>,
 }
@@ -145,9 +147,15 @@ impl<T: DiceBounds> RollRequest<T> {
     pub fn new(number: DiceNumber, dice: T) -> RollRequest<T> {
         RollRequest {
             number,
+            id: None,
             dice,
             actions: vec![],
         }
+    }
+
+    pub fn add_id(mut self, id: Option<DiceID>) -> RollRequest<T> {
+        self.id = id;
+        self
     }
 
     pub fn add_action(mut self, action: Action) -> RollRequest<T> {

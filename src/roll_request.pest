@@ -1,5 +1,6 @@
 WHITESPACE = _{ " " }
 POSITIVE_INT = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+DICE_ID = @{ ASCII_ALPHA{3,} ~ (ASCII_ALPHANUMERIC | "_" )*}
 
 // Dice definitions
 dice_number = @{ POSITIVE_INT }
@@ -8,7 +9,7 @@ numbered_dice = ${ dice_number? ~ ^"D" ~ dice_sides }
 fudge_dice = ${ dice_number? ~ ^"F" ~ !(ASCII_ALPHANUMERIC)} // Remove ambiguity with "Flip" by forbidding any following alphanumeric character
 num_const_dice = ${ "+" ~ dice_sides }
 dice = { numbered_dice | fudge_dice | num_const_dice }
-dice_and_action = { dice | ("(" ~ dice ~ action* ~ ")") }
+dice_and_action = { dice | ("(" ~ DICE_ID? ~ dice ~ action* ~ ")") }
 
 // Actions definition
 action_sum = @{ ^"Sum" }
