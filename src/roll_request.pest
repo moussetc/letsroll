@@ -15,6 +15,7 @@ dice_and_action = { dice | ("(" ~ DICE_ID? ~ dice ~ action* ~ ")") }
 action_sum = @{ ^"Sum" }
 action_flip = @{ ^"Flip" }
 action_total = @{ ^"Total" }
+action_concat = @{ ^"Concat" }
 
 action_mult = ${ ^"x" ~ POSITIVE_INT }
 
@@ -28,7 +29,7 @@ num_roll_value = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 fudge_roll_value = @{ "+" | "-" | "0" }
 action_reroll = ${ ^"Reroll(" ~ ((num_roll_value ~ ("," ~ num_roll_value)* ) | (fudge_roll_value ~ ("," ~ fudge_roll_value)* )) ~ ")" }
 action_explode = ${ ^"Explode(" ~ ((num_roll_value ~ ("," ~ num_roll_value)* ) | (fudge_roll_value ~ ("," ~ fudge_roll_value)* )) ~ ")" }
-action = ${ action_sum | action_flip | action_total | action_mult | action_explode | action_reroll_best | action_reroll_worst | action_reroll | action_keep_best | action_keep_worst }
+action = ${ action_sum | action_flip | action_total | action_concat | action_mult | action_explode | action_reroll_best | action_reroll_worst | action_reroll | action_keep_best | action_keep_worst }
 
 aggregation_count = @{ ^"Count" }
 aggregation = ${ aggregation_count }

@@ -23,6 +23,8 @@ pub enum Action {
     Sum,
     // Sum all the dice (numeric rolls only, cf. trait [TotalSum](trait.TotalSum.html)).
     Total,
+    // Concat all the rolls into one number (numeric rolls only, cf. trait [Concat](trait.Concat.html)).
+    Concat,
     /// Multiply the rolls by the action parameter (numeric rolls only, cf. trait [MultiplyBy](trait.MultiplyBy.html)).
     MultiplyBy(NumericRoll),
     /// Invert the digits of the rolls (numeric rolls only, cf. trait [FlipFlop](trait.FlipFlop.html)).   
@@ -201,6 +203,58 @@ impl Sum<NumericRolls> for NumericRolls {
             dice: self.dice.clone(),
             rolls: self.rolls.sum(),
         }
+    }
+}
+
+/// Return one roll that is the concatenation of the input numeric rolls
+///
+/// # Example
+/// ```
+/// # use letsroll::actions::Concat;
+/// # use letsroll::dice::{DiceGenerator, NumericRolls, NumericDice, NumericRollRequest};
+/// let dice_request = NumericRollRequest::new(
+///     5,
+///     NumericDice::RepeatingDice(vec![1, 2, 3, 4, 5]),
+/// );
+/// let dice = DiceGenerator::new();
+/// let rolls = NumericRolls::new(dice_request, &dice);
+/// let expected = vec![12345];
+/// assert_eq!(rolls.concat().unwrap().rolls, expected);
+/// ```
+pub trait Concat<T> {
+    fn concat(&self) -> Result<T, Error>;
+}
+impl Concat<Vec<NumericRoll>> for Vec<NumericRoll> {
+    fn concat(&self) -> Result<Vec<NumericRoll>, Error> {
+        Ok(vec![self
+            .iter()
+            .map(|roll| roll.to_string())
+            .collect::<Vec<String>>()
+            .join("")
+            .parse::<NumericRoll>()
+            .map_err(|_err| {
+                Error::bad_action_parameter(&String::from(
+                    "Could not parse result of concatenation",
+                ))
+            })?])
+    }
+}
+impl Concat<NumericRolls> for NumericRolls {
+    fn concat(&self) -> Result<NumericRolls, Error> {
+        Ok(Rolls {
+            description: format!(
+                "Concat({}: {})",
+                &self.description,
+                &self
+                    .rolls
+                    .iter()
+                    .map(|roll| roll.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            ),
+            dice: NumericDice::AggregationResult,
+            rolls: self.rolls.concat()?,
+        })
     }
 }
 
@@ -507,6 +561,7 @@ impl Apply<NumericRoll, NumericDice> for NumericRolls {
     ) -> Result<NumericRolls, Error> {
         match action {
             Action::Sum => Ok(self.sum()),
+            Action::Concat => self.concat(),
             Action::MultiplyBy(factor) => Ok(self.multiply(*factor)),
             Action::Explode(explosion_value) => Ok(self.explode(dice, &explosion_value)),
             Action::FlipFlop => Ok(self.flip()),
@@ -536,6 +591,7 @@ impl Apply<FudgeRoll, FudgeDice> for FudgeRolls {
             Action::RerollFudge(values_to_reroll) => Ok(self.reroll(dice, &values_to_reroll)),
             Action::Sum
             | Action::Total
+            | Action::Concat
             | Action::MultiplyBy(_)
             | Action::FlipFlop
             | Action::RerollNumeric(_)
@@ -584,6 +640,17 @@ mod tests {
         let output = rolls.flip();
         let expected = vec![100, 100, 100, 510, 1];
         assert_eq!(output.rolls, expected);
+    }
+
+    #[test]
+    fn transform_concat() {
+        let input = NUM_INPUT.to_vec();
+        let dice_request =
+            NumericRollRequest::new(input.len() as DiceNumber, NumericDice::RepeatingDice(input));
+        let rolls = NumericRolls::new(dice_request, &DiceGenerator::new());
+        let output = rolls.concat();
+        let expected = vec![11115100];
+        assert_eq!(output.unwrap().rolls, expected);
     }
 
     #[test]

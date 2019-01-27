@@ -240,7 +240,7 @@ fn parse_action(
         Rule::action_sum => actions.push(Action::Total),
         Rule::action_flip => actions.push(Action::FlipFlop),
         Rule::action_total => actions.push(Action::Total),
-
+        Rule::action_concat => actions.push(Action::Concat),
         Rule::action_mult => {
             actions.push(Action::MultiplyBy(parse_positive_int(action)?));
         }
